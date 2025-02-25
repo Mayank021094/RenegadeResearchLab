@@ -1,0 +1,30 @@
+class BookValue:
+    def __init__(self):
+        self.symbol = None
+        self.end_date = None
+        self.op_cashflow = 0
+        self.ppe = 0
+        #self.free_cashflow = self.op_cashflow - self.ppe
+        self.borr_noncurrent = 0
+        self.borr_current = 0
+        #self.total_debt = self.borr_current + self.borr_noncurrent
+        self.total_assets = 0
+        self.total_liabilities = 0
+        #self.net_assets = self.total_assets - self.total_liabilities
+        self.paid_up_value = 0
+        self.face_value = 0
+       # self.outstanding_shares = self.paid_up_value / self.face_value
+        self.equity = 0
+        #self.ev = self.equity + self.total_debt
+        self.pbt = 0
+        self.da = 0
+        self.fcost = 0
+        #self.ebitda = self.pbt + self.da + self.fcost
+        self.earnings = 0
+        self.total_revenue = 0
+        self.sales_from_ops = 0
+        #self.book_value = self.total_assets - self.total_liabilities
+        self.dividend = 0
+        self.current_assets = 0
+        self.current_liabilities = 0
+        #self.ebit = self.pbt + self.fcost

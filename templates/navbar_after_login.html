@@ -1,0 +1,49 @@
+<style>
+    .navbar-container {
+        background-color: #fff; /* White background */
+        color: #000; /* Black text */
+        border-radius: 2px; /* Adds rounded corners */
+        padding: 0px; /* Adds inner spacing */
+    }
+    .navbar-container .navbar-nav .nav-link {
+        color: #000 !important; /* Forces links to be black */
+    }
+    .navbar-container .navbar-nav .nav-link:hover {
+        color: #adb5bd !important; /* Changes color on hover for better UX */
+    }
+</style>
+<div class="navbar-container">
+    <div class="col-md-3 mb-2 mb-md-0">
+        <nav class="navbar navbar-expand-lg rounded" aria-label="Eleventh navbar example">
+            <div class="container-fluid">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#navbarsExample09" aria-controls="navbarsExample09" aria-expanded="false"
+                        aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarsExample09">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="{{url_for('dashboard')}}">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="{{url_for('stocks')}}">Stocks</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="#">Crypto</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="#">Futures</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="#">Options</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" aria-current="page" href="#">Forex</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </div>
+</div>

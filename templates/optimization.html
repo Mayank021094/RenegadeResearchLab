@@ -1,0 +1,55 @@
+<form method="post" action="{{url_for('strategy', id='Optimization')}}">
+    <br>
+    <div class="col-12 mb-3">
+        <label for="asset_universe" class="form-label">Asset Universe</label>
+        <select id="asset_universe" name="asset" class="form-select">
+            <option value>Choose...</option>
+            <option>Nifty 50</option>
+        </select>
+    </div>
+    <div class="col-12 mb-3">
+        <label for="strategy" class="form-label">Strategy</label>
+        <select id="strategy" name="strategy" class="form-select">
+            <option value>Choose...</option>
+            <option>Max Sharpe Ratio</option>
+            <option>Min Volatility</option>
+            <option>Risk Parity</option>
+            <option>Inverse Volatility</option>
+            <option>Kelly</option>
+        </select>
+    </div>
+    <label class="form-label">Top N</label>
+    <div class="input-group mb-3">
+      <input type="number" class="form-control" placeholder="Top N" aria-label="Top N" name="top_n" min="1" step="1" required>
+    </div>
+    <label>Time Frame</label>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="time" id="daily">
+      <label class="form-check-label" for="daily">
+        Daily
+      </label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="time" id="weekly">
+      <label class="form-check-label" for="weekly">
+        Weekly
+      </label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="time" id="quarterly" checked>
+      <label class="form-check-label" for="weekly">
+        Quarterly
+      </label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="time" id="yearly">
+      <label class="form-check-label" for="yearly">
+        Yearly
+      </label>
+    </div>
+    <div class="my-3">
+        <br>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </div>
+</form>
+

@@ -1,0 +1,31 @@
+<style>
+    /* Alignments for header and navbar */
+    .header-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 2px solid #000; /* Adds a clear separation line */
+        padding-bottom: 10px; /* Adds space below header */
+        margin-bottom: 20px; /* Adds space before the navbar */
+    }
+    .btn btn-success{
+        display: flex;
+      }
+</style>
+<div class="container">
+        <!-- Header Section -->
+        <header class="header-container py-3">
+            <div class="logo">
+                <div class="col-md-3 mb-2 mb-md-0">
+                    <a href= {{url_for("dashboard")}} class="d-inline-flex link-body-emphasis text-decoration-none">
+                      <img src="{{url_for('static', filename='/Logo Files/For Web/svg/black_logo_no_background.svg')}}" alt="logo" height="90">
+                      <svg class="bi" width="40" height="32" role="img" aria-label="Bootstrap"><use xlink:href=""></use></svg>
+                    </a>
+                  </div>
+            </div>
+        </header>
+        <!-- Navbar Section -->
+            {% include "navbar_after_login.html" %}
+</div>
+
+

@@ -1,0 +1,63 @@
+<form method="post" action="{{url_for('strategy', id='Value')}}">
+    <br>
+    <div class="col-12 mb-3">
+        <label for="asset_universe" class="form-label">Asset Universe</label>
+        <select id="asset_universe" name="asset" class="form-select">
+            <option value>Choose...</option>
+            <option>Nifty 50</option>
+        </select>
+    </div>
+    <div class="col-12 mb-3">
+        <label for="strategy" class="form-label">Strategy</label>
+        <select id="strategy" name="strategy" class="form-select">
+            <option value>Choose...</option>
+            <option>Cash Flow Yield</option>
+            <option>Book-to-Market</option>
+            <option>Dividend Yield</option>
+            <option>Earnings Yield</option>
+            <option>Sales Yield</option>
+            <option>PEG Ratio</option>
+            <option>Composite Score</option>
+        </select>
+    </div>
+    <label class="form-label">Top N</label>
+    <div class="input-group mb-3">
+      <input type="number" class="form-control" placeholder="Top N" aria-label="Top N" name="top_n" min="1" step="1" required>
+    </div>
+
+    <div class="col-12 mb-3">
+        <label id="wt_strategy" class="form-label">Weighting Strategy</label>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Equal weighted" id="equal_weighted" checked>
+            <label class="form-check-label" for="equal_weighted">Equal weighted</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Market-Cap weighted" id="market_cap_weighted">
+            <label class="form-check-label" for="market_cap_weighted">Market-Cap weighted</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Max-Sharpe Optimization" id="max_sharpe">
+            <label class="form-check-label" for="max_sharpe">Max-Sharpe Optimization</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Min Volatility" id="min_volatility">
+            <label class="form-check-label" for="min_volatility">Min Volatility</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Risk Parity" id="risk_parity">
+            <label class="form-check-label" for="risk_parity">Risk Parity</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Inverse Volatility" id="inverse_volatility">
+            <label class="form-check-label" for="inverse_volatility">Inverse Volatility</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="wt_strategy" value="Kelly" id="kelly">
+            <label class="form-check-label" for="kelly">Kelly</label>
+        </div>
+    </div>
+    <div class="my-3">
+        <br>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </div>
+</form>
