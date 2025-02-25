@@ -6,4 +6,5 @@ rough.ipynb
 macro_indicators_rough.ipynb
 rough.py
 .venv
-.ipynb_checkpoints
+.ipynb_checkpointsliterature/
+*.pdf
