@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 import math
 from extract_options_data import ExtractOptionsData
-from scipy.optimize import minimize
-from scipy.special import gamma
+from scipy.optimize import minimize, brentq
+import scipy.stats as si
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -203,15 +203,72 @@ class EstimateVolatility:
 
         return annualized_daily_volatility.dropna() if clean else annualized_daily_volatility
 
-    def bsm_implied_volatility(self, option_chain):
+    def bsm_implied_volatility(self, mkt_price, S, K, r, maturity, option_type, q=0, current_date=None):
+        """
+        Calculate the implied volatility using the Black-Scholes-Merton model.
 
+        :param mkt_price: Market price of the option
+        :param S: Current stock price
+        :param K: Strike price
+        :param r: Risk-free interest rate
+        :param q: Dividend yield
+        :param maturity: Maturity date of the option
+        :param option_type: Type of option ('CE' for Call, 'PE' for Put)
+        :param current_date: Current date (default is today)
+        :return: Implied volatility or NaN if calculation fails
+        """
+        if current_date is None:
+            current_date = datetime.date.today()
 
+        # Calculate time to maturity in trading days and calendar days
+        trading_days = np.busday_count(current_date, maturity)
+        calendar_days = np.busday_count(current_date, maturity, weekmask='1111111')
+        print(trading_days, calendar_days)
+
+        t1 = trading_days / 252  # Trading days to years
+        t2 = calendar_days / 365  # Calendar days to years
+
+        if t1 <= 0 or t2 <= 0:
+            return np.nan
+
+        def bsm_price(sigma):
+            """Calculate the Black-Scholes-Merton option price."""
+            d1 = (np.log(S / K) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
+            d2 = d1 - sigma * np.sqrt(t1)
+
+            if option_type == 'CE':
+                return S * np.exp(-q * t2) * si.norm.cdf(d1) - K * np.exp(-r * t2) * si.norm.cdf(d2)
+            elif option_type == 'PE':
+                return K * np.exp(-r * t2) * si.norm.cdf(-d2) - S * np.exp(-q * t2) * si.norm.cdf(-d1)
+            else:
+                raise ValueError("Invalid option type. Use 'CE' for Call or 'PE' for Put.")
+
+        def objective_function(sigma):
+            """Objective function for root-finding."""
+            return bsm_price(sigma) - mkt_price
+
+        try:
+            implied_vol = brentq(objective_function, 0, 5)
+            return implied_vol
+        except ValueError as e:
+            print(f"Failed to find implied volatility: {e}")
+            return np.nan
 
 # -------------------- USAGE -------------------#
-if __name__ == "__main__":
-    # Example usage
-    ticker = "NIFTY"
-    type = 'index'
-    volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
-    annualized_vol = volatility_estimator.high_frequency(period='30d', interval='15m')
-    print(f"Annualized High Frequency Volatility: {annualized_vol}")
+# if __name__ == "__main__":
+#     # Example usage
+#     ticker = "NIFTY"
+#     type = 'index'
+#     volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
+#     annualized_vol = volatility_estimator.high_frequency(period='30d', interval='15m')
+#     print(f"Annualized High Frequency Volatility: {annualized_vol}")
+
+# Implied Volatility Usage
+# if __name__ == "__main__":
+#     ticker = "NIFTY"
+#     type = 'index'
+#     volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
+#     imp_vol = volatility_estimator.bsm_implied_volatility(mkt_price=281, S=22547.55, K=22550, r=0.07, maturity=datetime.date(2025,3,27),
+#                                                           option_type='CE')
+#     print(f"Implied volatility of NIFTY call option:{imp_vol}")
+

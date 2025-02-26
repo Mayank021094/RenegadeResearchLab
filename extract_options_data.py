@@ -107,6 +107,8 @@ class ExtractOptionsData:
         return data
 
 
+
+
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
 #     ticker = "NIFTY"
