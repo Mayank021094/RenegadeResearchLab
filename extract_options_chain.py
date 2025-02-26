@@ -1,4 +1,5 @@
 # ------------------Import Libraries ------------#
+import numpy as np
 import yfinance as yf
 import pandas as pd
 import requests
@@ -151,7 +152,7 @@ class ExtractOptionsChain:
 
         call_df = pd.DataFrame(call_data, columns=['symbol', 'strike', 'expiry_date', 'bid_qty', 'bid_price', 'ask_qty',
                                                    'ask_price', 'ltp'])
-        call_df['S-K'] = call_df['ltp'] - call_df['strike']
+        call_df['S-K'] = np.abs(call_df['ltp'] - call_df['strike'])
         return call_df
 
     def extract_put_data(self):
@@ -179,7 +180,7 @@ class ExtractOptionsChain:
 
         put_df = pd.DataFrame(put_data, columns=['symbol', 'strike', 'expiry_date', 'bid_qty', 'bid_price', 'ask_qty',
                                                  'ask_price', 'ltp'])
-        put_df['K-S'] = put_df['strike'] - put_df['ltp']
+        put_df['K-S'] = np.abs(put_df['strike'] - put_df['ltp'])
         return put_df
 
     def extract_risk_free_rate(self, max_retries=5, delay=5):
@@ -240,12 +241,12 @@ class ExtractOptionsChain:
                         data.append([date, tenor_mapping[tenor_text], float(rate)])
 
                 # Convert data to a pandas DataFrame
-                df = pd.DataFrame(data, columns=["Date", "Tenor (Days)", "MIBOR Rate (%)"])
+                df = pd.DataFrame(data, columns=["Date", "Tenor", "MIBOR Rate (%)"])
                 # Convert Date column to datetime.date format
                 df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y").dt.date
                 # Keep only the latest date's rates
                 df_filtered = df[df["Date"] == df["Date"].max()]
-                return df#_filtered # Exit loop if successful
+                return df  # _filtered # Exit loop if successful
             except Exception as e:
                 driver.quit()
                 print(f"⚠️ Error: {e}")
@@ -257,7 +258,6 @@ class ExtractOptionsChain:
 
         print("❌ Failed to fetch data after multiple retries.")
         return pd.DataFrame()  # Return empty DataFrame if unsuccessful
-
 
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":

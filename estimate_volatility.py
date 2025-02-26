@@ -7,6 +7,7 @@ from extract_options_data import ExtractOptionsData
 from scipy.optimize import minimize, brentq
 import scipy.stats as si
 import warnings
+from scipy.interpolate import CubicSpline
 
 warnings.filterwarnings('ignore')
 import datetime
@@ -166,7 +167,7 @@ class EstimateVolatility:
         horizon_volatility = np.sqrt(forecast.variance.iloc[:, -1]) / 100  # Undo scaling
 
         # Convert horizon volatility to daily volatility
-        daily_volatility = horizon_volatility #/ np.sqrt(horizon)
+        daily_volatility = horizon_volatility  # / np.sqrt(horizon)
 
         # Annualize the daily volatility
         annualized_volatility = daily_volatility * np.sqrt(trading_periods)
@@ -203,7 +204,7 @@ class EstimateVolatility:
 
         return annualized_daily_volatility.dropna() if clean else annualized_daily_volatility
 
-    def bsm_implied_volatility(self, mkt_price, S, K, r, maturity, option_type, q=0, current_date=None):
+    def bsm_implied_volatility(self, mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
         """
         Calculate the implied volatility using the Black-Scholes-Merton model.
 
@@ -223,7 +224,14 @@ class EstimateVolatility:
         # Calculate time to maturity in trading days and calendar days
         trading_days = np.busday_count(current_date, maturity)
         calendar_days = np.busday_count(current_date, maturity, weekmask='1111111')
-        print(trading_days, calendar_days)
+
+        if calendar_days < 14:
+            r = rf[rf['Tenor'] == 14]['MIBOR Rate (%)'].values[0]
+        else:
+            x = np.array(rf['Tenor'])
+            y = np.array(rf['MIBOR Rate (%)'])
+            cs = CubicSpline(x, y)
+            r = cs(np.array(calendar_days))
 
         t1 = trading_days / 252  # Trading days to years
         t2 = calendar_days / 365  # Calendar days to years
@@ -271,4 +279,3 @@ class EstimateVolatility:
 #     imp_vol = volatility_estimator.bsm_implied_volatility(mkt_price=281, S=22547.55, K=22550, r=0.07, maturity=datetime.date(2025,3,27),
 #                                                           option_type='CE')
 #     print(f"Implied volatility of NIFTY call option:{imp_vol}")
-
