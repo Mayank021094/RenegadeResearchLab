@@ -5,6 +5,8 @@ import numpy as np
 import math
 from extract_options_data import ExtractOptionsData
 from scipy.optimize import minimize, brentq
+import scipy.optimize as opt
+from scipy.stats import norm
 import scipy.stats as si
 import warnings
 from scipy.interpolate import CubicSpline
@@ -261,6 +263,183 @@ class EstimateVolatility:
         except ValueError as e:
             print(f"Failed to find implied volatility: {e}")
             return np.nan
+
+    def corrado_su_implied_moments(self, mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
+        """
+        Compute the implied moments (volatility, skew, and kurtosis) for an option using the Corrado-Su adjustment.
+
+        Parameters:
+            mkt_price : array-like
+                Market prices of the option.
+            S : float
+                Underlying asset price.
+            K : array-like
+                Strike prices.
+            rf : DataFrame
+                Risk-free rate data containing 'MIBOR Rate (%)'.
+            maturity : datetime.date
+                Maturity date of the option.
+            option_type : str
+                Option type: 'CE' for call or 'PE' for put.
+            q : float, optional
+                Dividend yield (default is 0).
+            current_date : datetime.date, optional
+                Current date (default is today's date).
+
+        Returns:
+            pd.DataFrame or np.nan:
+                DataFrame with the implied volatility, skew, and kurtosis if successful; otherwise, NaN.
+        """
+
+        # Compute risk-free rate as the average of MIBOR rates.
+        r = np.mean(rf['MIBOR Rate (%)'])
+
+        # Use today's date if current_date is not provided.
+        if current_date is None:
+            current_date = datetime.date.today()
+
+        # Calculate time to maturity:
+        # trading_days: business days between current_date and maturity.
+        trading_days = np.busday_count(current_date, maturity)
+        # calendar_days: calendar days between current_date and maturity (using all days of the week).
+        calendar_days = np.busday_count(current_date, maturity, weekmask='1111111')
+
+        # Convert trading days and calendar days to year fractions.
+        t1 = trading_days / 252  # Trading days to years.
+        t2 = calendar_days / 365  # Calendar days to years.
+
+        # If the computed time to maturity is zero or negative, return NaN.
+        if t1 <= 0 or t2 <= 0:
+            return np.nan
+
+        def bsm_price(k, sigma):
+            """
+            Calculate the Black-Scholes-Merton option price for a given strike (k) and volatility (sigma).
+
+            Parameters:
+                k : float
+                    Strike price.
+                sigma : float
+                    Volatility.
+
+            Returns:
+                float:
+                    Option price computed using the BSM formula.
+            """
+            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
+            d2 = d1 - sigma * np.sqrt(t1)
+
+            # Return price based on option type.
+            if option_type == 'CE':
+                # European Call Option.
+                return S * np.exp(-q * t2) * si.norm.cdf(d1) - k * np.exp(-r * t2) * si.norm.cdf(d2)
+            elif option_type == 'PE':
+                # European Put Option.
+                return k * np.exp(-r * t2) * si.norm.cdf(-d2) - S * np.exp(-q * t2) * si.norm.cdf(-d1)
+            else:
+                raise ValueError("Invalid option type. Use 'CE' for Call or 'PE' for Put.")
+
+        def gram_charlier_adjustment(k, sigma):
+            """
+            Compute the Gram-Charlier adjustment terms for skewness and kurtosis.
+
+            Parameters:
+                k : float
+                    Strike price.
+                sigma : float
+                    Volatility.
+                skew : float
+                    Skewness parameter.
+                kurt : float
+                    Kurtosis parameter.
+
+            Returns:
+                tuple:
+                    Q3 and Q4 adjustment terms.
+            """
+            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
+            d2 = d1 - sigma * np.sqrt(t1)
+
+            # Compute Q3 and Q4 using the standard normal density function.
+            Q3 = (1 / 6) * (S * sigma * (t1 ** 0.5))(
+                (2 * sigma * (t1 ** 0.5) - d1) * si.norm.pdf(d1) + (si.norm.cdf(d1) * (sigma ** 2)))
+            Q4 = (1 / 24) * (S * sigma * (t1 ** 0.5))(
+                ((d1 ** 2) - 1 - (3 * sigma * (t1 ** 0.5) * d2)) * si.norm.pdf(d1) + (
+                            (sigma ** 3) * ((t1 ** 3) ** 0.5)) * si.norm.cdf(d1))
+            return Q3, Q4
+
+        def corrado_su_price(k, sigma, skew, kurt):
+            """
+            Calculate the option price using the Corrado-Su model, which adjusts the BSM price with skew and kurtosis corrections.
+
+            Parameters:
+                k : float
+                    Strike price.
+                sigma : float
+                    Volatility.
+                skew : float
+                    Skewness parameter.
+                kurt : float
+                    Kurtosis parameter.
+
+            Returns:
+                float:
+                    Adjusted option price.
+            """
+            # Base price from the Black-Scholes-Merton model.
+            BSM_PRICE = bsm_price(k, sigma)
+            # Compute adjustment terms.
+            Q3, Q4 = gram_charlier_adjustment(k, sigma, skew, kurt)
+            # Adjust the BSM price with skew and kurtosis corrections.
+            cs_price = BSM_PRICE + skew * Q3 + (kurt - 3) * Q4
+            return cs_price
+
+        def objective(params, K):
+            """
+            Objective function for optimization: minimize the sum of squared differences between
+            the model prices (using Corrado-Su adjustments) and the market prices.
+
+            Parameters:
+                params : list or array-like
+                    Parameters to optimize: [sigma, skew, kurt].
+                K : array-like
+                    Strike prices.
+
+            Returns:
+                float:
+                    Sum of squared errors.
+            """
+            sigma, skew, kurt = params
+            # Compute the model price for each strike.
+            model_prices = np.array([corrado_su_price(k, sigma, skew, kurt) for k in K])
+            return np.sum((model_prices - mkt_price) ** 2)
+
+        # Initial guess for the parameters: volatility, skew, kurtosis.
+        initial_guess = [0.1, 0, 3]
+
+        try:
+            # Optimize the parameters to best fit the market prices.
+            result = opt.minimize(objective, initial_guess, args=(K,), bounds=[(0.01, 1), (-2, 2), (1, 10)])
+        except Exception as e:
+            # If an exception occurs during optimization, print the error and return NaN.
+            print(f"Optimization failed: {e}")
+            return np.nan
+
+        # If optimization was unsuccessful, notify and return NaN.
+        if not result.success:
+            print("Optimization did not converge.")
+            return np.nan
+
+        # Extract optimal parameters: implied volatility, skew, and kurtosis.
+        implied_vol, implied_skew, implied_kurt = result.x
+
+        # Create and return a DataFrame with the implied moments.
+        df = pd.DataFrame({
+            'cs_implied_vol': implied_vol,
+            'cs_implied_skew': implied_skew,
+            'cs_implied_kurt': implied_kurt
+        })
+        return df
 
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":

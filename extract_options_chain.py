@@ -183,81 +183,7 @@ class ExtractOptionsChain:
         put_df['K-S'] = np.abs(put_df['strike'] - put_df['ltp'])
         return put_df
 
-    def extract_risk_free_rate(self, max_retries=5, delay=5):
-        url = "https://www.fbil.org.in/#/home"
-        retries = 0
-        data = []
-        while retries < max_retries:
-            try:
-                if retries <= 3:
-                    chrome_options = webdriver.ChromeOptions()
-                    chrome_options.add_experimental_option('detach', True)
-                    driver = webdriver.Chrome(options=chrome_options)
-                else:
-                    edge_options = webdriver.EdgeOptions()
-                    edge_options.use_chromium = True
-                    edge_options.add_experimental_option('detach', True)
-                    driver = webdriver.Edge(options=edge_options)
-                print(f"Attempt {retries + 1}: Fetching data from FBIL...")
-                driver.get(url)
-                time.sleep(3)
 
-                # Send click on Money Market button on website
-                WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, "MONEY MARKET/INTEREST RATES"))
-                ).click()
-
-                # Send click on Term MIBOR button
-                WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, "Term MIBOR"))
-                ).click()
-                # Extract table contents
-                table = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "termMibor"))
-                )
-                print("✅ Data fetched successfully!")
-                # driver.quit()
-                # Extract table rows
-                rows = table.find_elements(By.TAG_NAME, "tr")
-
-                # Define a mapping for tenor conversion
-                tenor_mapping = {
-                    "14 DAYS": 14,
-                    "1 MONTH": 30,
-                    "3 MONTHS": 90
-                }
-
-                # Loop through rows and extract relevant data
-                for row in rows[1:]:  # Skipping header row
-                    cols = row.find_elements(By.TAG_NAME, "td")
-                    if len(cols) < 4:
-                        continue  # Skip invalid rows
-                    date = cols[0].text.strip()
-                    tenor_text = cols[1].text.strip()
-                    rate = cols[3].text.strip()
-
-                    # Convert tenor to numeric days if it's in our mapping
-                    if tenor_text in tenor_mapping:
-                        data.append([date, tenor_mapping[tenor_text], float(rate)])
-
-                # Convert data to a pandas DataFrame
-                df = pd.DataFrame(data, columns=["Date", "Tenor", "MIBOR Rate (%)"])
-                # Convert Date column to datetime.date format
-                df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y").dt.date
-                # Keep only the latest date's rates
-                df_filtered = df[df["Date"] == df["Date"].max()]
-                return df  # _filtered # Exit loop if successful
-            except Exception as e:
-                driver.quit()
-                print(f"⚠️ Error: {e}")
-                retries += 1
-                time.sleep(delay)
-            finally:
-                if driver:
-                    driver.quit()
-
-        print("❌ Failed to fetch data after multiple retries.")
-        return pd.DataFrame()  # Return empty DataFrame if unsuccessful
 
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
@@ -275,9 +201,4 @@ class ExtractOptionsChain:
 #     put_df = option_chain.extract_put_data()
 #     print(put_df.head())
 
-# -----------Check risk-free rate code----------
-# if __name__ == "__main__":
-#     ticker = "NIFTY"
-#     option_chain = ExtractOptionsChain(ticker, 'index')
-#     rf = option_chain.extract_risk_free_rate()
-#     print(rf)
+
