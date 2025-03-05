@@ -61,7 +61,7 @@ def option_json():
             expiry_json = {}
             # Use single bracket filtering (not double brackets)
             ce_chain_df = call_chain[call_chain['expiryDate'] == expiry]
-            print(ce_chain_df)
+            #print(ce_chain_df)
             try:
                 expiry_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
                     mkt_price=ce_chain_df['mkt_price'].values[0],
@@ -82,13 +82,14 @@ def option_json():
                 expiry_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
                 expiry_json['edge'] = np.abs(
                     expiry_json['bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
-                print(expiry_json)
+                #print(expiry_json)
             except Exception as e:
                 print(f"❌ Error processing call option for expiry {expiry}: {e}")
             ce_json[expiry] = expiry_json
-            print(ce_json)
+            #print(ce_json)
 
             # Process put options similarly
+        for expiry in put_chain['expiryDate'].unique():
             expiry_json = {}
             pe_chain_df = put_chain[put_chain['expiryDate'] == expiry]
             try:
@@ -111,16 +112,16 @@ def option_json():
                 expiry_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
                 expiry_json['edge'] = np.abs(
                     expiry_json['bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
-                print(expiry_json)
+                #print(expiry_json)
             except Exception as e:
                 print(f"❌ Error processing put option for expiry {expiry}: {e}")
             pe_json[expiry] = expiry_json
-            print(pe_json)
+            #print(pe_json)
 
         implied_moments_json['CE'] = ce_json
         implied_moments_json['PE'] = pe_json
         symbols_json['implied_moments'] = implied_moments_json
-        print(symbols_json)
+        #print(symbols_json)
 
         options_json[r['symbol']] = symbols_json
 

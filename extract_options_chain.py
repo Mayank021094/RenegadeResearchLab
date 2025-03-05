@@ -237,7 +237,7 @@ class ExtractOptionsChain:
             (
                 d.get('underlying', 'N/A'),  # Symbol
                 d.get('strikePrice', 0),  # Strike Price
-                pd.to_datetime(d.get('expiryDate', '1970-01-01'), errors='coerce'),  # Expiry Date
+                pd.to_datetime(d.get('expiryDate', '1970-01-01'), errors='coerce').date(),  # Expiry Date
                 d.get('bidQty', 0),  # Bid Quantity
                 d.get('bidprice', 0),  # Bid Price
                 d.get('askQty', 0),  # Ask Quantity

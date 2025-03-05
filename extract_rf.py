@@ -92,12 +92,13 @@ def extract_risk_free_rate(max_retries=5, delay=5):
 
             # Convert "Date" to a Python datetime.date object
             df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y").dt.date
+            df['MIBOR Rate (%)'] = df['MIBOR Rate (%)']/100
 
             # Filter the DataFrame to keep only the latest date's rates (optional)
-            df_filtered = df[df["Date"] == df["Date"].max()]
+           # df_filtered = df[df["Date"] == df["Date"].max()]
 
             # Return the full DataFrame (df) or the filtered one as needed
-            return df_filtered
+            return df
         except Exception as e:
             # If an error occurs, close the driver, print the error, increment retries, and wait
             driver.quit()

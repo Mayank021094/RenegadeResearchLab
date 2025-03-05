@@ -10,6 +10,9 @@ from scipy.stats import norm
 import scipy.stats as si
 import warnings
 from scipy.interpolate import CubicSpline
+from extract_options_chain import ExtractOptionsChain
+from extract_options_data import ExtractOptionsData
+from extract_rf import extract_risk_free_rate
 
 warnings.filterwarnings('ignore')
 import datetime
@@ -227,13 +230,15 @@ class EstimateVolatility:
         trading_days = np.busday_count(current_date, maturity)
         calendar_days = np.busday_count(current_date, maturity, weekmask='1111111')
 
-        if calendar_days < 14:
-            r = rf[rf['Tenor'] == 14]['MIBOR Rate (%)'].values[0]
-        else:
-            x = np.array(rf['Tenor'])
-            y = np.array(rf['MIBOR Rate (%)'])
-            cs = CubicSpline(x, y)
-            r = cs(np.array(calendar_days))
+        r = np.mean(rf['MIBOR Rate (%)'])
+
+        # if calendar_days < 14:
+        #     r = rf[rf['Tenor'] == 14]['MIBOR Rate (%)'].values[0]
+        # else:
+        #     x = np.array(rf['Tenor'])
+        #     y = np.array(rf['MIBOR Rate (%)'])
+        #     cs = CubicSpline(x, y)
+        #     r = cs(np.array(calendar_days))
 
         t1 = trading_days / 252  # Trading days to years
         t2 = calendar_days / 365  # Calendar days to years
@@ -339,7 +344,7 @@ class EstimateVolatility:
             else:
                 raise ValueError("Invalid option type. Use 'CE' for Call or 'PE' for Put.")
 
-        def gram_charlier_adjustment(k, sigma):
+        def gram_charlier_adjustment(k, sigma, skew, kurt):
             """
             Compute the Gram-Charlier adjustment terms for skewness and kurtosis.
 
@@ -357,7 +362,7 @@ class EstimateVolatility:
                 tuple:
                     Q3 and Q4 adjustment terms.
             """
-            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * (sigma ** 2) * t1) / (sigma * np.sqrt(t1))
+            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
             d2 = d1 - sigma * np.sqrt(t1)
 
             # Compute Q3 and Q4 using the standard normal density function.
@@ -367,8 +372,8 @@ class EstimateVolatility:
 
             Q3 = (1 / 6) * term_1 * (term_2 + term_3)
 
-            term_4 = (d1**2) - 1 - (3 * sigma * np.sqrt(t1) * d2) * si.norm.pdf(d1)
-            term_5 = (sigma**3) * np.sqrt(t1**3) * si.norm.cdf(d1)
+            term_4 = (d1 ** 2) - 1 - (3 * sigma * np.sqrt(t1) * d2) * si.norm.pdf(d1)
+            term_5 = (sigma ** 3) * np.sqrt(t1 ** 3) * si.norm.cdf(d1)
             Q4 = (1 / 24) * term_1 * (term_4 + term_5)
             return Q3, Q4
 
@@ -439,12 +444,11 @@ class EstimateVolatility:
 
         # Create and return a DataFrame with the implied moments.
         df = pd.DataFrame({
-            'cs_implied_vol': implied_vol,
-            'cs_implied_skew': implied_skew,
-            'cs_implied_kurt': implied_kurt
+            'cs_implied_vol': [implied_vol],
+            'cs_implied_skew': [implied_skew],
+            'cs_implied_kurt': [implied_kurt]
         })
         return df
-
 
 
 # -------------------- USAGE -------------------#
@@ -461,6 +465,25 @@ class EstimateVolatility:
 #     ticker = "NIFTY"
 #     type = 'index'
 #     volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
-#     imp_vol = volatility_estimator.bsm_implied_volatility(mkt_price=281, S=22547.55, K=22550, r=0.07, maturity=datetime.date(2025,3,27),
-#                                                           option_type='CE')
-#     print(f"Implied volatility of NIFTY call option:{imp_vol}")
+#     op_chain = ExtractOptionsChain(ticker=ticker, type_=type)
+#     call_chain = op_chain.extract_call_data()
+#     rf = extract_risk_free_rate()
+#     vol_estimates = EstimateVolatility(ticker=ticker, type=type)
+#     for expiry in call_chain['expiryDate'].unique():
+#         ce_chain_df = call_chain[call_chain['expiryDate'] == expiry]
+#         imp_vol = vol_estimates.bsm_implied_volatility(
+#             mkt_price=ce_chain_df['mkt_price'].values[0],
+#             S=ce_chain_df['ltp'].values[0],
+#             K=ce_chain_df['strikePrice'].values[0],
+#             rf=rf, maturity=expiry,
+#             option_type='CE', q=0, current_date=None
+#         )
+#         cor_su_vol = vol_estimates.corrado_su_implied_moments(
+#                     mkt_price=np.array(ce_chain_df['mkt_price']),
+#                     S=ce_chain_df['ltp'].values[0],
+#                     K=np.array(ce_chain_df['strikePrice']),
+#                     rf=rf, maturity=expiry, option_type='CE', q=0,
+#                     current_date=None
+#                 )
+#     print(f"BSM Implied volatility of NIFTY call option:{imp_vol}")
+#     print(f"Corrado Su Implied moments of NIFTY call option:{cor_su_vol}")
