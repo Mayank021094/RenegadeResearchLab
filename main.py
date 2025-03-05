@@ -158,7 +158,6 @@ def sign_up():
 def dashboard():
     return render_template("dashboard.html")
 
-#-----------------------Sidebar Items--------------#
 #-----------------------Stocks---------------------#
 @app.route('/stocks', methods=['GET', 'POST'])
 def stocks():
@@ -202,6 +201,15 @@ def results(id):
     param = session.get('param')
     wts = pd.read_json(wts_json)  # Convert JSON string back to DataFrame
     return render_template('results_stocks.html', id=id, wts=wts, param=param)
+
+
+#-------------------Options-------------------------------#
+
+@app.route('/options', methods=['GET', 'POST'])
+def options():
+
+
+    return render_template("options.html")
 
 
 if __name__ == "__main__":

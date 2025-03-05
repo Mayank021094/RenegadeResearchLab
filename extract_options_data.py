@@ -20,21 +20,31 @@ from yahooquery import Ticker
 
 
 # ---------------------CONSTANTS------------------#
+# (No constants defined here, but this section can be used for future variables.)
 
 # --------------------MAIN CODE-------------------#
 
 class ExtractOptionsData:
+    # Class to extract options data and related information.
 
     def __init__(self):
+        # Initialize with URL for NSE underlying information.
         self.url_underlying = "https://www.nseindia.com/api/underlying-information"
 
     def extract_available_option_symbols(self, max_retries=5, delay=5):
+        # Extracts the list of available option symbols from NSE, including indices and equities.
+        # max_retries: Maximum number of attempts to fetch data.
+        # delay: Delay (in seconds) between retries.
+
         url = self.url_underlying
         retries = 0
         data = None
-        while retries < max_retries:
+
+        # Loop to attempt data fetching up to max_retries times
+        while retries <= max_retries:
             try:
-                if retries <= 3:
+                # For the first 3 retries, use Chrome; afterwards, use Edge
+                if retries < 3:
                     chrome_options = webdriver.ChromeOptions()
                     chrome_options.add_experimental_option('detach', True)
                     driver = webdriver.Chrome(options=chrome_options)
@@ -43,42 +53,53 @@ class ExtractOptionsData:
                     edge_options.use_chromium = True
                     edge_options.add_experimental_option('detach', True)
                     driver = webdriver.Edge(options=edge_options)
+
                 print(f"Attempt {retries + 1}: Fetching data from NSE...")
                 driver.get(url)
-                # Wait for page to load completely
+
+                # Wait until the body tag is present to ensure page is loaded
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
-                # Extract JSON content
+
+                # Extract JSON content from the body of the page
                 json_text = driver.find_element(By.TAG_NAME, "body").text
                 data = json.loads(json_text)
                 print("✅ Data fetched successfully!")
                 driver.quit()
-                break  # Exit loop if successful
+                break  # Exit the loop if data fetched successfully
             except Exception as e:
+                # If an error occurs, close the driver, print the error, increment retries, and wait
                 driver.quit()
                 print(f"⚠️ Error fetching data: {e}")
                 retries += 1
                 time.sleep(delay)
+
+        # If data remains None after all retries, return an empty DataFrame
         if not data:
             print("⚠️ Error fetching available symbols.")
             return pd.DataFrame()
+
+        # Extract index and equity records from the JSON response
         index_records = data.get("data", {}).get("IndexList", [])
         equity_records = data.get("data", {}).get("UnderlyingList", [])
 
+        # Build tuples of (symbol, underlying, type)
         index_symbols = [(d['symbol'], d['underlying'], 'index') for d in index_records if 'symbol' in d]
         equity_symbols = [(d['symbol'], d['underlying'], 'equity') for d in equity_records if 'symbol' in d]
 
-        # Combine both lists into a single list
+        # Combine index and equity symbols
         combined_symbols = index_symbols + equity_symbols
 
-        # Create a DataFrame with three columns: 'symbol', 'underlying', and 'type'
+        # Create a DataFrame with columns: symbol, underlying, and type
         df_symbols = pd.DataFrame(combined_symbols, columns=['symbol', 'underlying', 'type'])
 
         return df_symbols
 
     def extracting_ohlc(self, ticker, type, **kwargs):
+        # Extracts OHLC data for the given ticker (equity or index) at a specified interval.
 
+        # Map the ticker to the appropriate Yahoo Finance symbol
         if type == 'equity':
             self.ticker = ticker + '.NS'
         elif type == 'index':
@@ -95,93 +116,15 @@ class ExtractOptionsData:
         else:
             print("⚠️ Error fetching available symbols.")
 
-        # Download OHLC data at 5-minute intervals
-        # try:
-        #     stock = yf.Ticker(self.ticker)
-        #     data = stock.history(**kwargs)
-        # except:
+        # Download OHLC data (here using yahooquery's Ticker instead of yfinance directly)
+        # The code is set to handle adjustments and attempt multiple retries if needed.
         stock = Ticker(self.ticker, asynchronous=True, retry=20, status_forcelist=[404, 429, 500, 502, 503, 504])
         data = stock.history(adj_ohlc=True, **kwargs)
+
+        # The returned MultiIndex often has the symbol in the first level; drop it for clarity
         data.index = data.index.droplevel('symbol')
 
         return data
-    def extract_risk_free_rate(self, max_retries=5, delay=5):
-        url = "https://www.fbil.org.in/#/home"
-        retries = 0
-        data = []
-        while retries < max_retries:
-            try:
-                if retries <= 3:
-                    chrome_options = webdriver.ChromeOptions()
-                    chrome_options.add_experimental_option('detach', True)
-                    driver = webdriver.Chrome(options=chrome_options)
-                else:
-                    edge_options = webdriver.EdgeOptions()
-                    edge_options.use_chromium = True
-                    edge_options.add_experimental_option('detach', True)
-                    driver = webdriver.Edge(options=edge_options)
-                print(f"Attempt {retries + 1}: Fetching data from FBIL...")
-                driver.get(url)
-                time.sleep(3)
-
-                # Send click on Money Market button on website
-                WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, "MONEY MARKET/INTEREST RATES"))
-                ).click()
-
-                # Send click on Term MIBOR button
-                WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, "Term MIBOR"))
-                ).click()
-                # Extract table contents
-                table = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "termMibor"))
-                )
-                print("✅ Data fetched successfully!")
-                # driver.quit()
-                # Extract table rows
-                rows = table.find_elements(By.TAG_NAME, "tr")
-
-                # Define a mapping for tenor conversion
-                tenor_mapping = {
-                    "14 DAYS": 14,
-                    "1 MONTH": 30,
-                    "3 MONTHS": 90
-                }
-
-                # Loop through rows and extract relevant data
-                for row in rows[1:]:  # Skipping header row
-                    cols = row.find_elements(By.TAG_NAME, "td")
-                    if len(cols) < 4:
-                        continue  # Skip invalid rows
-                    date = cols[0].text.strip()
-                    tenor_text = cols[1].text.strip()
-                    rate = cols[3].text.strip()
-
-                    # Convert tenor to numeric days if it's in our mapping
-                    if tenor_text in tenor_mapping:
-                        data.append([date, tenor_mapping[tenor_text], float(rate)])
-
-                # Convert data to a pandas DataFrame
-                df = pd.DataFrame(data, columns=["Date", "Tenor", "MIBOR Rate (%)"])
-                # Convert Date column to datetime.date format
-                df["Date"] = pd.to_datetime(df["Date"], format="%d %b %Y").dt.date
-                # Keep only the latest date's rates
-                df_filtered = df[df["Date"] == df["Date"].max()]
-                return df  # _filtered # Exit loop if successful
-            except Exception as e:
-                driver.quit()
-                print(f"⚠️ Error: {e}")
-                retries += 1
-                time.sleep(delay)
-            finally:
-                if driver:
-                    driver.quit()
-
-        print("❌ Failed to fetch data after multiple retries.")
-        return pd.DataFrame()  # Return empty DataFrame if unsuccessful
-
-
 
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":

@@ -357,15 +357,19 @@ class EstimateVolatility:
                 tuple:
                     Q3 and Q4 adjustment terms.
             """
-            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
+            d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * (sigma ** 2) * t1) / (sigma * np.sqrt(t1))
             d2 = d1 - sigma * np.sqrt(t1)
 
             # Compute Q3 and Q4 using the standard normal density function.
-            Q3 = (1 / 6) * (S * sigma * (t1 ** 0.5))(
-                (2 * sigma * (t1 ** 0.5) - d1) * si.norm.pdf(d1) + (si.norm.cdf(d1) * (sigma ** 2)))
-            Q4 = (1 / 24) * (S * sigma * (t1 ** 0.5))(
-                ((d1 ** 2) - 1 - (3 * sigma * (t1 ** 0.5) * d2)) * si.norm.pdf(d1) + (
-                            (sigma ** 3) * ((t1 ** 3) ** 0.5)) * si.norm.cdf(d1))
+            term_1 = S * sigma * np.sqrt(t1)
+            term_2 = (2 * sigma * np.sqrt(t1) - d1) * si.norm.pdf(d1)
+            term_3 = si.norm.cdf(d1) * (sigma ** 2)
+
+            Q3 = (1 / 6) * term_1 * (term_2 + term_3)
+
+            term_4 = (d1**2) - 1 - (3 * sigma * np.sqrt(t1) * d2) * si.norm.pdf(d1)
+            term_5 = (sigma**3) * np.sqrt(t1**3) * si.norm.cdf(d1)
+            Q4 = (1 / 24) * term_1 * (term_4 + term_5)
             return Q3, Q4
 
         def corrado_su_price(k, sigma, skew, kurt):
@@ -440,6 +444,8 @@ class EstimateVolatility:
             'cs_implied_kurt': implied_kurt
         })
         return df
+
+
 
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
