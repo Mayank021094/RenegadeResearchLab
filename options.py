@@ -39,7 +39,6 @@ def option_json():
             'High_Frequency': vol_estimates.high_frequency(period='30d', interval='15m'),
             'GARCH(1,1)': vol_estimates.garch()
         }
-
         # Compute the mean of each volatility measure
         means = [s.mean() for s in realized_vol_json.values()]
         forecasted_realized_volatility = sum(means) / len(means)
