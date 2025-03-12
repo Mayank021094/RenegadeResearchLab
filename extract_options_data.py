@@ -126,6 +126,64 @@ class ExtractOptionsData:
 
         return data
 
+    def extracting_dividend_yield(self, ticker, type, **kwargs):
+        """
+        Extracts the dividend yield for a given ticker based on its asset type.
+
+        Parameters:
+            ticker (str): The base ticker symbol.
+            type (str): The type of asset ('equity' or 'index').
+            kwargs: Additional keyword arguments (currently not used).
+
+        Returns:
+            float or None: The dividend yield as a decimal (e.g., 0.03 for 3%) if available,
+                           otherwise None if data is missing or an error occurs.
+        """
+        # Determine the correct ticker format based on asset type.
+        if type == 'equity':
+            # Append the '.NS' suffix for equities traded on the NSE.
+            self.ticker = ticker + '.NS'
+        elif type == 'index':
+            # Mapping for known index tickers.
+            index_mapping = {
+                'NIFTY': '^NSEI',
+                'BANKNIFTY': '^NSEBANK',
+                'FINNIFTY': 'NIFTY_FIN_SERVICE.NS',
+                'MIDCPNIFTY': 'NIFTY_MIDCAP_100.NS',
+                'NIFTYNXT50': '^NSMIDCP'
+            }
+            if ticker in index_mapping:
+                self.ticker = index_mapping[ticker]
+            else:
+                # If the provided index ticker is not recognized, print an error and exit.
+                print("⚠️ Error: Unknown index ticker provided.")
+                return None
+        else:
+            # For an unknown asset type, print an error and exit.
+            print("⚠️ Error: Unknown asset type provided.")
+            return None
+
+        # Create a yfinance Ticker object.
+        stock = yf.Ticker(self.ticker)
+
+        try:
+            # Try to retrieve the dividend yield from the stock info.
+            dividend_yield = stock.info.get('dividendYield')
+            if dividend_yield is not None:
+                # dividend yield is given as a percentage, therefore converting it to a decimal.
+                return dividend_yield / 100.0
+            else:
+                # Inform the user if dividend yield data is not available.
+                print("⚠️ Dividend yield information is not available for this ticker.")
+                return None
+        except Exception as e:
+            # Catch any errors that occur during data retrieval.
+            print(f"⚠️ An error occurred while fetching dividend yield: {e}")
+            return None
+
+
+
+
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
 #     ticker = "NIFTY"

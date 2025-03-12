@@ -1,0 +1,7 @@
+{
+  "^NSEI": {
+    "underlying": "NIFTY",
+    "type": "index",
+    "realized_volatility": {
+      "Close-to-close": {
+        

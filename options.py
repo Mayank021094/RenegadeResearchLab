@@ -5,6 +5,8 @@ from estimate_volatility import EstimateVolatility
 from extract_rf import extract_risk_free_rate
 import math
 import pandas as pd
+from greeks import Extract_Greeks
+from options_strategies import Strategies
 
 
 # -------------------- MAIN CODE -------------------#
@@ -44,88 +46,106 @@ def option_json():
         forecasted_realized_volatility = sum(means) / len(means)
         symbols_json['realized_volatility'] = realized_vol_json
 
-        #print(symbols_json)
+        # print(symbols_json)
         # Initialize implied moments dictionary
-        implied_moments_json = {}
 
         # Extract options chain data for calls and puts
         op_chain = ExtractOptionsChain(ticker=r['symbol'], type_=r['type'])
         call_chain = op_chain.extract_call_data()
         put_chain = op_chain.extract_put_data()
+        q = ExtractOptionsData.extracting_dividend_yield(ticker=r['symbol'], type=r['type'])
+
+        symbols_json['Call_option_chain'] = call_chain
+        symbols_json['Put_option_chain'] = put_chain
 
         ce_json = {}
         pe_json = {}
+        strategies_json = {}
         # Process each expiry date in the call chain
         for expiry in call_chain['expiryDate'].unique():
-            expiry_json = {}
+            expiry_ce_json = {}
+            implied_moments_json = {}
             # Use single bracket filtering (not double brackets)
             ce_chain_df = call_chain[call_chain['expiryDate'] == expiry]
-            #print(ce_chain_df)
+            # print(ce_chain_df)
             try:
-                expiry_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
+                implied_moments_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
                     mkt_price=ce_chain_df['mkt_price'].values[0],
                     S=ce_chain_df['ltp'].values[0],
                     K=ce_chain_df['strikePrice'].values[0],
                     rf=rf, maturity=expiry,
-                    option_type='CE', q=0, current_date=None
+                    option_type='CE', q=q, current_date=None
                 )
                 cs_moments = vol_estimates.corrado_su_implied_moments(
                     mkt_price=np.array(ce_chain_df['mkt_price']),
                     S=ce_chain_df['ltp'].values[0],
                     K=np.array(ce_chain_df['strikePrice']),
-                    rf=rf, maturity=expiry, option_type='CE', q=0,
+                    rf=rf, maturity=expiry, option_type='CE', q=q,
                     current_date=None
                 )
-                expiry_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
-                expiry_json['cs_implied_skew'] = cs_moments['cs_implied_skew'].values[0]
-                expiry_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
-                expiry_json['edge'] = np.abs(
-                    expiry_json['bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
-                #print(expiry_json)
+                implied_moments_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
+                implied_moments_json['cs_implied_skew'] = cs_moments['cs_implied_skew'].values[0]
+                implied_moments_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
+                implied_moments_json['edge'] = np.abs(
+                    implied_moments_json[
+                        'bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
+
             except Exception as e:
                 print(f"❌ Error processing call option for expiry {expiry}: {e}")
-            ce_json[expiry] = expiry_json
-            #print(ce_json)
+
+            expiry_ce_json['implied_moments'] = implied_moments_json
+            ce_json[expiry] = expiry_ce_json
 
             # Process put options similarly
-        for expiry in put_chain['expiryDate'].unique():
-            expiry_json = {}
+            expiry_pe_json = {}
+            implied_moments_json = {}
             pe_chain_df = put_chain[put_chain['expiryDate'] == expiry]
             try:
-                expiry_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
+                implied_moments_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
                     mkt_price=pe_chain_df['mkt_price'].values[0],
                     S=pe_chain_df['ltp'].values[0],
                     K=pe_chain_df['strikePrice'].values[0],
                     rf=rf, maturity=expiry,
-                    option_type='PE', q=0, current_date=None
+                    option_type='PE', q=q, current_date=None
                 )
                 cs_moments = vol_estimates.corrado_su_implied_moments(
                     mkt_price=np.array(pe_chain_df['mkt_price']),
                     S=pe_chain_df['ltp'].values[0],
                     K=np.array(pe_chain_df['strikePrice']),
-                    rf=rf, maturity=expiry, option_type='PE', q=0,
+                    rf=rf, maturity=expiry, option_type='PE', q=q,
                     current_date=None
                 )
-                expiry_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
-                expiry_json['cs_implied_skew'] = cs_moments['cs_implied_skew'].values[0]
-                expiry_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
-                expiry_json['edge'] = np.abs(
-                    expiry_json['bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
-                #print(expiry_json)
+                implied_moments_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
+                implied_moments_json['cs_implied_skew'] = cs_moments['cs_implied_skew'].values[0]
+                implied_moments_json['cs_implied_kurt'] = cs_moments['cs_implied_kurt'].values[0]
+                implied_moments_json['edge'] = np.abs(
+                    implied_moments_json[
+                        'bsm_implied_vol'] - forecasted_realized_volatility) / forecasted_realized_volatility
+                # print(expiry_json)
             except Exception as e:
                 print(f"❌ Error processing put option for expiry {expiry}: {e}")
-            pe_json[expiry] = expiry_json
-            #print(pe_json)
 
-        implied_moments_json['CE'] = ce_json
-        implied_moments_json['PE'] = pe_json
-        symbols_json['implied_moments'] = implied_moments_json
-        #print(symbols_json)
+            expiry_pe_json['implied_moments'] = implied_moments_json
+
+            pe_json[expiry] = expiry_pe_json
+            expiry_strategy_json = {}
+            #Strategies
+            strategies = Strategies(expiry=expiry, ce_chain=ce_chain_df, pe_chain=pe_chain_df, rf=rf, maturity=expiry, q=q )
+            expiry_strategy_json['long_call'] = strategies.long_call()
+
+
+
+
+        symbols_json['CE'] = ce_json
+        symbols_json['PE'] = pe_json
+        symbols_json['strategies'] = strategies_json
+        # print(symbols_json)
 
         options_json[r['symbol']] = symbols_json
 
     return options_json
 
-#----------------Usage----------------------#
+
+# ----------------Usage----------------------#
 test_json = option_json()
 print(test_json)
