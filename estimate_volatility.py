@@ -209,7 +209,8 @@ class EstimateVolatility:
 
         return annualized_daily_volatility.dropna() if clean else annualized_daily_volatility
 
-    def bsm_implied_volatility(self, mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
+    @staticmethod
+    def bsm_implied_volatility(mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
         """
         Calculate the implied volatility using the Black-Scholes-Merton model.
 

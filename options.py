@@ -69,7 +69,7 @@ def option_json():
             ce_chain_df = call_chain[call_chain['expiryDate'] == expiry]
             # print(ce_chain_df)
             try:
-                implied_moments_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
+                implied_moments_json['bsm_implied_vol'] = EstimateVolatility.bsm_implied_volatility(
                     mkt_price=ce_chain_df['mkt_price'].values[0],
                     S=ce_chain_df['ltp'].values[0],
                     K=ce_chain_df['strikePrice'].values[0],
@@ -101,7 +101,7 @@ def option_json():
             implied_moments_json = {}
             pe_chain_df = put_chain[put_chain['expiryDate'] == expiry]
             try:
-                implied_moments_json['bsm_implied_vol'] = vol_estimates.bsm_implied_volatility(
+                implied_moments_json['bsm_implied_vol'] = EstimateVolatility.bsm_implied_volatility(
                     mkt_price=pe_chain_df['mkt_price'].values[0],
                     S=pe_chain_df['ltp'].values[0],
                     K=pe_chain_df['strikePrice'].values[0],
@@ -130,7 +130,7 @@ def option_json():
             pe_json[expiry] = expiry_pe_json
             expiry_strategy_json = {}
             #Strategies
-            strategies = Strategies(expiry=expiry, ce_chain=ce_chain_df, pe_chain=pe_chain_df, rf=rf, maturity=expiry, q=q )
+            strategies = Strategies(expiry=expiry, ce_chain=ce_chain_df, pe_chain=pe_chain_df, rf=rf, q=q )
             expiry_strategy_json['long_call'] = strategies.long_call()
 
 
