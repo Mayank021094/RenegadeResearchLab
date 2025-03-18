@@ -99,6 +99,7 @@ class Strategies:
             return None, None
 
     # === Strategy Methods ===
+
     def long_call(self):
         """
         Compute the payoff and Greeks for a long call option strategy.

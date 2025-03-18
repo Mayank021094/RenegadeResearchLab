@@ -157,11 +157,11 @@ class ExtractOptionsData:
             else:
                 # If the provided index ticker is not recognized, print an error and exit.
                 print("⚠️ Error: Unknown index ticker provided.")
-                return None
+                return 0
         else:
             # For an unknown asset type, print an error and exit.
             print("⚠️ Error: Unknown asset type provided.")
-            return None
+            return 0
 
         # Create a yfinance Ticker object.
         stock = yf.Ticker(self.ticker)
@@ -175,11 +175,11 @@ class ExtractOptionsData:
             else:
                 # Inform the user if dividend yield data is not available.
                 print("⚠️ Dividend yield information is not available for this ticker.")
-                return None
+                return 0
         except Exception as e:
             # Catch any errors that occur during data retrieval.
             print(f"⚠️ An error occurred while fetching dividend yield: {e}")
-            return None
+            return 0
 
 
 
