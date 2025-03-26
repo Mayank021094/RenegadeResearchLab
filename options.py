@@ -28,10 +28,10 @@ def option_json():
     for _, r in symbols.iterrows():
         symbols_json = {}
         symbols_json['underlying'] = r['underlying']
-        symbols_json['type'] = r['type']
+        symbols_json['category'] = r['category']
 
         # Estimate realized volatility using different methods
-        vol_estimates = EstimateVolatility(ticker=r['symbol'], type=r['type'])
+        vol_estimates = EstimateVolatility(ticker=r['symbol'], category=r['category'])
         realized_vol_json = {
             'Close-to-close': vol_estimates.close_to_close(),
             'Yang-Zhang': vol_estimates.yang_zhang(),
@@ -39,7 +39,8 @@ def option_json():
             'Garmann_Klass': vol_estimates.garman_klass(),
             'Rogers_Satchell': vol_estimates.rogers_satchell(),
             'High_Frequency': vol_estimates.high_frequency(period='30d', interval='15m'),
-            'GARCH(1,1)': vol_estimates.garch()
+            'GARCH(1,1)': vol_estimates.garch(),
+            'Volatility_Cones_df': vol_estimates.volatility_cones()
         }
         # Compute the mean of each volatility measure
         means = [s.mean() for s in realized_vol_json.values()]
@@ -50,10 +51,11 @@ def option_json():
         # Initialize implied moments dictionary
 
         # Extract options chain data for calls and puts
-        op_chain = ExtractOptionsChain(ticker=r['symbol'], type_=r['type'])
+        op_chain = ExtractOptionsChain(ticker=r['symbol'], category_=r['category'])
         call_chain = op_chain.extract_call_data()
         put_chain = op_chain.extract_put_data()
-        q = ExtractOptionsData.extracting_dividend_yield(ticker=r['symbol'], type=r['type'])
+
+        q = ExtractOptionsData.extracting_dividend_yield(ticker=r['symbol'], category=r['category'])
 
         symbols_json['Call_option_chain'] = call_chain
         symbols_json['Put_option_chain'] = put_chain
@@ -74,13 +76,13 @@ def option_json():
                     S=ce_chain_df['ltp'].values[0],
                     K=ce_chain_df['strikePrice'].values[0],
                     rf=rf, maturity=expiry,
-                    option_type='CE', q=q, current_date=None
+                    option_category='CE', q=q, current_date=None
                 )
                 cs_moments = vol_estimates.corrado_su_implied_moments(
                     mkt_price=np.array(ce_chain_df['mkt_price']),
                     S=ce_chain_df['ltp'].values[0],
                     K=np.array(ce_chain_df['strikePrice']),
-                    rf=rf, maturity=expiry, option_type='CE', q=q,
+                    rf=rf, maturity=expiry, option_category='CE', q=q,
                     current_date=None
                 )
                 implied_moments_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
@@ -106,13 +108,13 @@ def option_json():
                     S=pe_chain_df['ltp'].values[0],
                     K=pe_chain_df['strikePrice'].values[0],
                     rf=rf, maturity=expiry,
-                    option_type='PE', q=q, current_date=None
+                    option_category='PE', q=q, current_date=None
                 )
                 cs_moments = vol_estimates.corrado_su_implied_moments(
                     mkt_price=np.array(pe_chain_df['mkt_price']),
                     S=pe_chain_df['ltp'].values[0],
                     K=np.array(pe_chain_df['strikePrice']),
-                    rf=rf, maturity=expiry, option_type='PE', q=q,
+                    rf=rf, maturity=expiry, option_category='PE', q=q,
                     current_date=None
                 )
                 implied_moments_json['cs_implied_vol'] = cs_moments['cs_implied_vol'].values[0]
@@ -131,10 +133,23 @@ def option_json():
             expiry_strategy_json = {}
             #Strategies
             strategies = Strategies(expiry=expiry, ce_chain=ce_chain_df, pe_chain=pe_chain_df, rf=rf, q=q )
-            expiry_strategy_json['long_call'] = strategies.long_call()
-
-
-
+            expiry_strategy_json['Long Call'] = strategies.long_call()
+            expiry_strategy_json['Long Put'] = strategies.long_put()
+            expiry_strategy_json['Short Call'] = strategies.short_call()
+            expiry_strategy_json['Short Put'] = strategies.short_put()
+            expiry_strategy_json['Bull Call Spread'] = strategies.bull_call_spread()
+            expiry_strategy_json['Bull Put Spread'] = strategies.bull_put_spread()
+            expiry_strategy_json['Bear Call Spread'] = strategies.bear_call_spread()
+            expiry_strategy_json['Bear Put Spread'] = strategies.bear_put_spread()
+            expiry_strategy_json['Long Call Butterfly'] = strategies.long_call_butterfly()
+            expiry_strategy_json['Long Put Butterfly'] = strategies.long_put_butterfly()
+            expiry_strategy_json['Long Straddle'] = strategies.long_straddle()
+            expiry_strategy_json['Short Straddle'] = strategies.short_straddle()
+            expiry_strategy_json['Strip'] = strategies.strip()
+            expiry_strategy_json['Strap'] = strategies.strap()
+            expiry_strategy_json['Long Strangle'] = strategies.long_strangle()
+            expiry_strategy_json['Short Strangle'] = strategies.short_strangle()
+            strategies_json[expiry] = expiry_strategy_json
 
         symbols_json['CE'] = ce_json
         symbols_json['PE'] = pe_json
@@ -144,7 +159,6 @@ def option_json():
         options_json[r['symbol']] = symbols_json
 
     return options_json
-
 
 # ----------------Usage----------------------#
 test_json = option_json()

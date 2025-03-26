@@ -84,25 +84,25 @@ class ExtractOptionsData:
         index_records = data.get("data", {}).get("IndexList", [])
         equity_records = data.get("data", {}).get("UnderlyingList", [])
 
-        # Build tuples of (symbol, underlying, type)
+        # Build tuples of (symbol, underlying, category)
         index_symbols = [(d['symbol'], d['underlying'], 'index') for d in index_records if 'symbol' in d]
         equity_symbols = [(d['symbol'], d['underlying'], 'equity') for d in equity_records if 'symbol' in d]
 
         # Combine index and equity symbols
         combined_symbols = index_symbols + equity_symbols
 
-        # Create a DataFrame with columns: symbol, underlying, and type
-        df_symbols = pd.DataFrame(combined_symbols, columns=['symbol', 'underlying', 'type'])
+        # Create a DataFrame with columns: symbol, underlying, and category
+        df_symbols = pd.DataFrame(combined_symbols, columns=['symbol', 'underlying', 'category'])
 
         return df_symbols
 
-    def extracting_ohlc(self, ticker, type, **kwargs):
+    def extracting_ohlc(self, ticker, category, **kwargs):
         # Extracts OHLC data for the given ticker (equity or index) at a specified interval.
 
         # Map the ticker to the appropriate Yahoo Finance symbol
-        if type == 'equity':
+        if category == 'equity':
             self.ticker = ticker + '.NS'
-        elif type == 'index':
+        elif category == 'index':
             if ticker == 'NIFTY':
                 self.ticker = '^NSEI'
             elif ticker == 'BANKNIFTY':
@@ -126,24 +126,24 @@ class ExtractOptionsData:
 
         return data
 
-    def extracting_dividend_yield(self, ticker, type, **kwargs):
+    def extracting_dividend_yield(self, ticker, category, **kwargs):
         """
-        Extracts the dividend yield for a given ticker based on its asset type.
+        Extracts the dividend yield for a given ticker based on its asset category.
 
         Parameters:
             ticker (str): The base ticker symbol.
-            type (str): The type of asset ('equity' or 'index').
+            category (str): The category of asset ('equity' or 'index').
             kwargs: Additional keyword arguments (currently not used).
 
         Returns:
             float or None: The dividend yield as a decimal (e.g., 0.03 for 3%) if available,
                            otherwise None if data is missing or an error occurs.
         """
-        # Determine the correct ticker format based on asset type.
-        if type == 'equity':
+        # Determine the correct ticker format based on asset category.
+        if category == 'equity':
             # Append the '.NS' suffix for equities traded on the NSE.
             self.ticker = ticker + '.NS'
-        elif type == 'index':
+        elif category == 'index':
             # Mapping for known index tickers.
             index_mapping = {
                 'NIFTY': '^NSEI',
@@ -159,8 +159,8 @@ class ExtractOptionsData:
                 print("⚠️ Error: Unknown index ticker provided.")
                 return 0
         else:
-            # For an unknown asset type, print an error and exit.
-            print("⚠️ Error: Unknown asset type provided.")
+            # For an unknown asset category, print an error and exit.
+            print("⚠️ Error: Unknown asset category provided.")
             return 0
 
         # Create a yfinance Ticker object.
@@ -187,9 +187,9 @@ class ExtractOptionsData:
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
 #     ticker = "NIFTY"
-#     type = 'index'
+#     category = 'index'
 #     option_data_object = ExtractOptionsData()
-#     nifty_ohlc_data = option_data_object.extracting_ohlc(ticker=ticker, type=type, period='60d', interval='5m')
+#     nifty_ohlc_data = option_data_object.extracting_ohlc(ticker=ticker, category=category, period='60d', interval='5m')
 #     print(nifty_ohlc_data.head(10))
 # -----------Check risk-free rate code----------
 # if __name__ == "__main__":

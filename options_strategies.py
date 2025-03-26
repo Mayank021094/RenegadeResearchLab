@@ -67,11 +67,11 @@ class Strategies:
         except Exception as e:
             print(f"Error creating DataFrame: {e}")
             return None
-    def _compute_base_greeks(self, K, imp_vol, option_type, S):
+    def _compute_base_greeks(self, K, imp_vol, option_category, S):
         """Instantiate an Extract_Greeks object and compute the base Greeks."""
         try:
             eg = Extract_Greeks(K=K, imp_vol=imp_vol, rf=self.rf, maturity=self.expiry,
-                                option_type=option_type, q=self.q, current_date=None)
+                                option_category=option_category, q=self.q, current_date=None)
             greeks = {
                 'delta': eg.delta(S=S),
                 'gamma': eg.gamma(S=S),
@@ -121,7 +121,7 @@ class Strategies:
             imp_vol = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_calls['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -186,7 +186,7 @@ class Strategies:
             imp_vol = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_calls['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -252,7 +252,7 @@ class Strategies:
             imp_vol = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_puts['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -317,7 +317,7 @@ class Strategies:
             imp_vol = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_puts['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -388,11 +388,11 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_calls['mkt_price'].values[0],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_calls['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -482,11 +482,11 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_puts['mkt_price'].values[0],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_puts['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -575,11 +575,11 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_calls['mkt_price'].values[0],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_calls['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -670,11 +670,11 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_puts['mkt_price'].values[0],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_puts['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -764,15 +764,15 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_calls['mkt_price'].values[1],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.ce_chain['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_k3 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_calls['mkt_price'].values[1],
                 S=S, K=K_3, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -871,15 +871,15 @@ class Strategies:
             imp_vol_k1 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_puts['mkt_price'].values[1],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
             imp_vol_k2 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.pe_chain['mkt_price'].values[0],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
             imp_vol_k3 = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=itm_puts['mkt_price'].values[1],
                 S=S, K=K_3, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -966,11 +966,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.ce_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.pe_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -1044,11 +1044,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.ce_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.pe_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -1119,11 +1119,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.ce_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.pe_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -1198,11 +1198,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.ce_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=self.pe_chain['mkt_price'].values[0],
                 S=S, K=K, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -1287,11 +1287,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_calls['mkt_price'].values[1],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_puts['mkt_price'].values[1],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None
@@ -1378,11 +1378,11 @@ class Strategies:
             imp_vol_call = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_calls['mkt_price'].values[1],
                 S=S, K=K_2, rf=self.rf, maturity=self.expiry,
-                option_type='CE', q=self.q, current_date=None)
+                option_category='CE', q=self.q, current_date=None)
             imp_vol_put = EstimateVolatility.bsm_implied_volatility(
                 mkt_price=otm_puts['mkt_price'].values[1],
                 S=S, K=K_1, rf=self.rf, maturity=self.expiry,
-                option_type='PE', q=self.q, current_date=None)
+                option_category='PE', q=self.q, current_date=None)
         except Exception as e:
             print(f"Error extracting price data: {e}")
             return None

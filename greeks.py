@@ -28,7 +28,7 @@ STAMP = 0.002 / 100
 
 # --------------------MAIN CODE-------------------#
 class Extract_Greeks:
-    def __init__(self, K, imp_vol, rf, maturity, option_type, q=0, current_date=None):
+    def __init__(self, K, imp_vol, rf, maturity, option_category, q=0, current_date=None):
         """
         Initialize the option parameters and time to maturity.
 
@@ -38,14 +38,14 @@ class Extract_Greeks:
             rf: DataFrame or dict containing risk-free rate data.
                 (Note: If rf values are in percentage, consider converting them by dividing by 100.)
             maturity: Option expiration date (as a datetime.date or a compatible string).
-            option_type: 'CE' for call, 'PE' for put.
+            option_category: 'CE' for call, 'PE' for put.
             q: Dividend yield (default is 0).
             current_date: Valuation date (defaults to today's date if not provided).
         """
         self.K = K
         self.imp_vol = imp_vol
         self.r = np.mean(rf['MIBOR Rate (%)'])  # Make sure these are in decimal form if needed.
-        self.option_type = option_type
+        self.option_category = option_category
 
         if current_date is None:
             current_date = datetime.date.today()
@@ -70,14 +70,14 @@ class Extract_Greeks:
         d1 = (np.log(S / self.K) + (self.r - self.q) * self.t2 + 0.5 * self.imp_vol ** 2 * self.t1) / \
              (self.imp_vol * np.sqrt(self.t1))
 
-        if self.option_type == 'CE':
+        if self.option_category == 'CE':
             # Call delta: exp(-q*t2) * N(d1)
             delta = np.exp(-self.q * self.t2) * si.norm.cdf(d1)
-        elif self.option_type == 'PE':
+        elif self.option_category == 'PE':
             # Put delta: exp(-q*t2) * (N(d1) - 1) which is equivalent to -exp(-q*t2)*N(-d1)
             delta = np.exp(-self.q * self.t2) * (si.norm.cdf(d1) - 1)
         else:
-            raise ValueError("option_type must be 'CE' (call) or 'PE' (put)")
+            raise ValueError("option_category must be 'CE' (call) or 'PE' (put)")
 
         return delta
 
@@ -117,14 +117,14 @@ class Extract_Greeks:
              (self.imp_vol * np.sqrt(self.t1))
         d2 = d1 - self.imp_vol * np.sqrt(self.t1)
 
-        if self.option_type == 'CE':
+        if self.option_category == 'CE':
             # Call rho: K * t2 * exp(-r*t2) * N(d2)
             rho = self.K * self.t2 * np.exp(-self.r * self.t2) * si.norm.cdf(d2)
-        elif self.option_type == 'PE':
+        elif self.option_category == 'PE':
             # Put rho: -K * t2 * exp(-r*t2) * N(-d2)
             rho = -self.K * self.t2 * np.exp(-self.r * self.t2) * si.norm.cdf(-d2)
         else:
-            raise ValueError("option_type must be 'CE' (call) or 'PE' (put)")
+            raise ValueError("option_category must be 'CE' (call) or 'PE' (put)")
 
         return rho
 
@@ -142,18 +142,18 @@ class Extract_Greeks:
         # Use t1 in the denominator for volatility scaling and exp(-q*t2) for dividend discounting.
         term_1 = S * si.norm.pdf(d1) * self.imp_vol * np.exp(-self.q * self.t2) / (2 * np.sqrt(self.t1))
 
-        if self.option_type == 'CE':
+        if self.option_category == 'CE':
             # Call theta: -term_1 - rK exp(-r*t2)*N(d2) + qS exp(-q*t2)*N(d1)
             term_2 = self.q * S * si.norm.cdf(d1) * np.exp(-self.q * self.t2)
             term_3 = self.r * self.K * np.exp(-self.r * self.t2) * si.norm.cdf(d2)
             theta = -term_1 - term_3 + term_2
-        elif self.option_type == 'PE':
+        elif self.option_category == 'PE':
             # Put theta: -term_1 + rK exp(-r*t2)*N(-d2) - qS exp(-q*t2)*N(-d1)
             term_2 = self.q * S * si.norm.cdf(-d1) * np.exp(-self.q * self.t2)
             term_3 = self.r * self.K * np.exp(-self.r * self.t2) * si.norm.cdf(-d2)
             theta = -term_1 + term_3 - term_2
         else:
-            raise ValueError("option_type must be 'CE' (call) or 'PE' (put)")
+            raise ValueError("option_category must be 'CE' (call) or 'PE' (put)")
 
         return theta
 
@@ -181,7 +181,7 @@ class Extract_Greeks:
               - self.r: Risk-free rate (r)
               - self.K: Strike price (K)
               - self.q: Dividend yield (q)
-              - self.option_type: Option type ('CE' for call or 'PE' for put)
+              - self.option_category: Option category ('CE' for call or 'PE' for put)
               - Global constants: BROKERAGE, STT, NSE, STAMP, GAMMA_RISK_AVERSION
             Ensure these are defined and set appropriately in your code.
 
@@ -228,15 +228,15 @@ class Extract_Greeks:
         d1 = (np.log(S / self.K) + (self.r - self.q) * self.t2 + 0.5 * sigma_m ** 2 * self.t1) / (
                 sigma_m * np.sqrt(self.t1))
 
-        # Calculate delta based on the option type.
-        if self.option_type == 'CE':
+        # Calculate delta based on the option category.
+        if self.option_category == 'CE':
             # Call option delta: exp(-q*t2) * N(d1)
             delta_m = np.exp(-self.q * self.t2) * si.norm.cdf(d1)
-        elif self.option_type == 'PE':
+        elif self.option_category == 'PE':
             # Put option delta: exp(-q*t2) * (N(d1) - 1)
             delta_m = np.exp(-self.q * self.t2) * (si.norm.cdf(d1) - 1)
         else:
-            raise ValueError("option_type must be 'CE' (call) or 'PE' (put)")
+            raise ValueError("option_category must be 'CE' (call) or 'PE' (put)")
 
         # 6) Determine the hedging band boundaries.
         # The band is defined by subtracting and adding (H0 + H1) from the delta.

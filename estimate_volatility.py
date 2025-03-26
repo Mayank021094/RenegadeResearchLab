@@ -29,20 +29,22 @@ class EstimateVolatility:
     A class to estimate volatility using various methods.
     """
 
-    def __init__(self, ticker, type):
+    def __init__(self, ticker, category):
         """
-        Initialize the class with the ticker symbol and data type.
+        Initialize the class with the ticker symbol and data category.
 
         :param ticker: The ticker symbol of the asset.
-        :param type: The type of data (e.g., 'stock', 'option').
+        :param category: The category of data (e.g., 'stock', 'option').
         """
         self.ticker = ticker
-        self.type = type
+        self.category = category
         extract_data_object = ExtractOptionsData()
-        self.daily_data = extract_data_object.extracting_ohlc(ticker=self.ticker, type=self.type, period='1y',
+        self.daily_data = extract_data_object.extracting_ohlc(ticker=self.ticker, category=self.category, period='1y',
+                                                              interval='1d')
+        self.cones_data = extract_data_object.extracting_ohlc(ticker=self.ticker, category=self.category, period='5y',
                                                               interval='1d')
         if self.daily_data.empty:
-            raise ValueError(f"No data found for ticker: {self.ticker} and type: {self.type}")
+            raise ValueError(f"No data found for ticker: {self.ticker} and category: {self.category}")
 
     def close_to_close(self, window=DEFAULT_WINDOW, trading_periods=DEFAULT_TRADING_PERIODS, clean=True):
         """
@@ -188,7 +190,7 @@ class EstimateVolatility:
         :param kwargs: Additional arguments for data extraction.
         :return: Annualized high-frequency volatility.
         """
-        price_series = ExtractOptionsData().extracting_ohlc(ticker=self.ticker, type=self.type, **kwargs)
+        price_series = ExtractOptionsData().extracting_ohlc(ticker=self.ticker, category=self.category, **kwargs)
         price_series['Date'] = price_series.index.date
         price_series['prev_close'] = price_series['close'].shift(1)
 
@@ -210,7 +212,7 @@ class EstimateVolatility:
         return annualized_daily_volatility.dropna() if clean else annualized_daily_volatility
 
     @staticmethod
-    def bsm_implied_volatility(mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
+    def bsm_implied_volatility(mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
         """
         Calculate the implied volatility using the Black-Scholes-Merton model.
 
@@ -220,7 +222,7 @@ class EstimateVolatility:
         :param r: Risk-free interest rate
         :param q: Dividend yield
         :param maturity: Maturity date of the option
-        :param option_type: Type of option ('CE' for Call, 'PE' for Put)
+        :param option_category: Type of option ('CE' for Call, 'PE' for Put)
         :param current_date: Current date (default is today)
         :return: Implied volatility or NaN if calculation fails
         """
@@ -252,12 +254,12 @@ class EstimateVolatility:
             d1 = (np.log(S / K) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
             d2 = d1 - sigma * np.sqrt(t1)
 
-            if option_type == 'CE':
+            if option_category == 'CE':
                 return S * np.exp(-q * t2) * si.norm.cdf(d1) - K * np.exp(-r * t2) * si.norm.cdf(d2)
-            elif option_type == 'PE':
+            elif option_category == 'PE':
                 return K * np.exp(-r * t2) * si.norm.cdf(-d2) - S * np.exp(-q * t2) * si.norm.cdf(-d1)
             else:
-                raise ValueError("Invalid option type. Use 'CE' for Call or 'PE' for Put.")
+                raise ValueError("Invalid option category. Use 'CE' for Call or 'PE' for Put.")
 
         def objective_function(sigma):
             """Objective function for root-finding."""
@@ -270,7 +272,7 @@ class EstimateVolatility:
             print(f"Failed to find implied volatility: {e}")
             return np.nan
 
-    def corrado_su_implied_moments(self, mkt_price, S, K, rf, maturity, option_type, q=0, current_date=None):
+    def corrado_su_implied_moments(self, mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
         """
         Compute the implied moments (volatility, skew, and kurtosis) for an option using the Corrado-Su adjustment.
 
@@ -285,8 +287,8 @@ class EstimateVolatility:
                 Risk-free rate data containing 'MIBOR Rate (%)'.
             maturity : datetime.date
                 Maturity date of the option.
-            option_type : str
-                Option type: 'CE' for call or 'PE' for put.
+            option_category : str
+                Option category: 'CE' for call or 'PE' for put.
             q : float, optional
                 Dividend yield (default is 0).
             current_date : datetime.date, optional
@@ -335,15 +337,15 @@ class EstimateVolatility:
             d1 = (np.log(S / k) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
             d2 = d1 - sigma * np.sqrt(t1)
 
-            # Return price based on option type.
-            if option_type == 'CE':
+            # Return price based on option category.
+            if option_category == 'CE':
                 # European Call Option.
                 return S * np.exp(-q * t2) * si.norm.cdf(d1) - k * np.exp(-r * t2) * si.norm.cdf(d2)
-            elif option_type == 'PE':
+            elif option_category == 'PE':
                 # European Put Option.
                 return k * np.exp(-r * t2) * si.norm.cdf(-d2) - S * np.exp(-q * t2) * si.norm.cdf(-d1)
             else:
-                raise ValueError("Invalid option type. Use 'CE' for Call or 'PE' for Put.")
+                raise ValueError("Invalid option category. Use 'CE' for Call or 'PE' for Put.")
 
         def gram_charlier_adjustment(k, sigma, skew, kurt):
             """
@@ -451,25 +453,95 @@ class EstimateVolatility:
         })
         return df
 
+    def volatility_cones(self):
+        """
+        Calculates volatility cones using logarithmic returns and multiple rolling window sizes.
 
+        Returns:
+            pd.DataFrame: DataFrame containing volatility cone values for various window sizes.
+        Raises:
+            AttributeError: If the 'close' column is missing in self.cones_data.
+            ValueError: If there's insufficient data for a specific rolling window or invalid parameters.
+            NameError: If DEFAULT_TRADING_PERIODS is not defined.
+        """
+        try:
+            # Ensure the expected 'close' column exists in the data.
+            if 'close' not in self.cones_data.columns:
+                raise AttributeError("The data does not contain a 'close' column.")
+
+            # Initialize an empty DataFrame to store our computed values.
+            cones_df = pd.DataFrame()
+
+            # Define a helper function to calculate the scaling factor (m)
+            def func_m(window, size_return_series):
+                # Ensure that there is enough data for the given window size.
+                if size_return_series < window:
+                    raise ValueError(f"Not enough data points ({size_return_series}) for the window size {window}.")
+                n = size_return_series - window + 1
+                if n <= 0:
+                    raise ValueError(f"Computed number of periods ({n}) is invalid. Check window size and data length.")
+                t1 = window / n
+                t2 = (window ** 2) - 1
+                t3 = 3 * (n ** 2)
+                denominator = 1 - t1 + (t2 / t3)
+                if denominator <= 0:
+                    raise ValueError("Denominator in scaling factor calculation is non-positive. Check inputs.")
+                m = (1 / denominator) ** 0.5
+                return m
+
+            # Calculate logarithmic returns and store them in the DataFrame.
+            cones_df['ln_returns'] = (self.cones_data['close'] / self.cones_data['close'].shift(1)).apply(np.log)
+            cones_df = cones_df.dropna(inplace=True)
+
+            # Define the rolling windows (in days) for volatility calculations.
+            windows = [20, 40, 60, 120, 240]
+            for window in windows:
+                # Calculate the rolling standard deviation of the logarithmic returns.
+                rolling_std = cones_df['ln_returns'].rolling(window=window).std()
+
+                # Ensure DEFAULT_TRADING_PERIODS is defined.
+                try:
+                    scaling = math.sqrt(DEFAULT_TRADING_PERIODS)
+                except NameError:
+                    raise NameError("DEFAULT_TRADING_PERIODS is not defined.")
+
+                # Compute the scaling factor for the current window.
+                try:
+                    m_value = func_m(window, len(cones_df['ln_returns']))
+                except ValueError as ve:
+                    raise ValueError(f"Error computing scaling factor for window {window}: {ve}")
+
+                # Compute the volatility and store it in a new column.
+                cones_df[f'{window}_day_vol'] = rolling_std * scaling * m_value
+
+            # Remove any rows with NaN values resulting from the rolling window calculations.
+            cones_df.dropna(inplace=True)
+
+            # Return the DataFrame with volatility cones.
+            return cones_df
+
+        except Exception as e:
+            # Print the error message for debugging and return an empty DataFrame.
+            print(f"An error occurred in volatility_cones: {e}")
+            return pd.DataFrame()
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
 #     # Example usage
 #     ticker = "NIFTY"
-#     type = 'index'
-#     volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
+#     category = 'index'
+#     volatility_estimator = EstimateVolatility(ticker=ticker, category=category)
 #     annualized_vol = volatility_estimator.high_frequency(period='30d', interval='15m')
 #     print(f"Annualized High Frequency Volatility: {annualized_vol}")
 
 # Implied Volatility Usage
 # if __name__ == "__main__":
 #     ticker = "NIFTY"
-#     type = 'index'
-#     volatility_estimator = EstimateVolatility(ticker=ticker, type=type)
-#     op_chain = ExtractOptionsChain(ticker=ticker, type_=type)
+#     category = 'index'
+#     volatility_estimator = EstimateVolatility(ticker=ticker, category=category)
+#     op_chain = ExtractOptionsChain(ticker=ticker, category_=category)
 #     call_chain = op_chain.extract_call_data()
 #     rf = extract_risk_free_rate()
-#     vol_estimates = EstimateVolatility(ticker=ticker, type=type)
+#     vol_estimates = EstimateVolatility(ticker=ticker, category=category)
 #     for expiry in call_chain['expiryDate'].unique():
 #         ce_chain_df = call_chain[call_chain['expiryDate'] == expiry]
 #         imp_vol = vol_estimates.bsm_implied_volatility(
@@ -477,13 +549,13 @@ class EstimateVolatility:
 #             S=ce_chain_df['ltp'].values[0],
 #             K=ce_chain_df['strikePrice'].values[0],
 #             rf=rf, maturity=expiry,
-#             option_type='CE', q=0, current_date=None
+#             option_category='CE', q=0, current_date=None
 #         )
 #         cor_su_vol = vol_estimates.corrado_su_implied_moments(
 #                     mkt_price=np.array(ce_chain_df['mkt_price']),
 #                     S=ce_chain_df['ltp'].values[0],
 #                     K=np.array(ce_chain_df['strikePrice']),
-#                     rf=rf, maturity=expiry, option_type='CE', q=0,
+#                     rf=rf, maturity=expiry, option_category='CE', q=0,
 #                     current_date=None
 #                 )
 #     print(f"BSM Implied volatility of NIFTY call option:{imp_vol}")

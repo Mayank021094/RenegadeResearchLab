@@ -29,16 +29,16 @@ class ExtractOptionsChain:
     provides methods to parse call and put data into DataFrames.
     """
 
-    def __init__(self, ticker, type_):
+    def __init__(self, ticker, category):
         """
-        Initialize the ExtractOptionsChain object with a given ticker and type.
+        Initialize the ExtractOptionsChain object with a given ticker and category.
 
         :param ticker: Symbol of the security (e.g., 'BANKNIFTY' or 'RELIANCE')
-        :param type_: 'index' or 'equity', indicating the NSE URL to be used
+        :param category: 'index' or 'equity', indicating the NSE URL to be used
         """
         # Remove any suffix after a dot (e.g., ".NS") from the ticker if present
         self.ticker = re.sub(r"\..*", "", ticker) if "." in ticker else ticker
-        self.type = type_
+        self.category = category
         self.data = None
 
         # Two different NSE endpoints for indices vs. equities
@@ -60,7 +60,7 @@ class ExtractOptionsChain:
         :return: None (the JSON data is stored in self.data)
         """
         # Construct the appropriate URL based on whether it's an index or equity
-        url = self.url_index + self.ticker if self.type == 'index' else self.url_equity + self.ticker
+        url = self.url_index + self.ticker if self.category == 'index' else self.url_equity + self.ticker
 
         retries = 0
         data = None
