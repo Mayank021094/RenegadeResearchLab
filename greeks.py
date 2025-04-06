@@ -213,7 +213,7 @@ class Extract_Greeks:
         k_part_2 = self.t2 ** (-0.02)
         k_part_3 = (np.exp(-self.r * self.t2) / self.imp_vol) ** 0.25
         k_part_4 = (GAMMA_RISK_AVERSION * (S ** 2) * abs(option_gamma)) ** 0.15
-        # Fixed the factor to -5.76 to match the docstring
+        # Fixed the factor to -4.76 to match the docstring
         k_val = -4.76 * k_part_1 * k_part_2 * k_part_3 * k_part_4
 
         # 4) Calculate the adjusted volatility:
@@ -225,9 +225,10 @@ class Extract_Greeks:
 
         # 5) Compute the Black–Scholes delta using adjusted volatility σ_m.
         #    d1 = [ln(S/K) + (r - q)*t2 + 0.5*σ_m^2*t1] / (σ_m * sqrt(t1))
-        d1 = (np.log(S / self.K) + (self.r - self.q) * self.t2 + 0.5 * sigma_m ** 2 * self.t1) / (
-                sigma_m * np.sqrt(self.t1))
-
+        # d1 = (np.log(S / self.K) + (self.r - self.q) * self.t2 + 0.5 * sigma_m ** 2 * self.t1) / (
+        #         sigma_m * np.sqrt(self.t1))
+        d1 = (np.log(S / self.K) + (self.r - self.q) * self.t2 + 0.5 * self.imp_vol ** 2 * self.t1) / (
+                    self.imp_vol * np.sqrt(self.t1))
         # Calculate delta based on the option category.
         if self.option_category == 'CE':
             # Call option delta: exp(-q*t2) * N(d1)
@@ -243,5 +244,8 @@ class Extract_Greeks:
         band_halfwidth = H0 + H1
         lower_bound = delta_m - band_halfwidth
         upper_bound = delta_m + band_halfwidth
+
+        # print("\ntransaction cost=", lam, "\tspread=", spread)#"\nAdj_delta=", delta_m, "\nH0=", H0, "\nH1=", H1, "\nlower_bound=", lower_bound, "\nupper_bound=", upper_bound,
+        # #       "\nadj_K=", k_val, "\ntransaction cost=", lam, "\nspread=", spread)
 
         return lower_bound, upper_bound

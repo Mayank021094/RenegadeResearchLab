@@ -51,11 +51,12 @@ class Strategies:
         except Exception as e:
             print(f"Error computing S_array: {e}")
             return None
-    def _build_payoff_dataframe(self, payoff_series, delta_series, gamma_series, vega_series,
+    def _build_payoff_dataframe(self, S_series, payoff_series, delta_series, gamma_series, vega_series,
                                   zak_lower_series, zak_upper_series):
         """Build a DataFrame from the computed series."""
         try:
             payoff_df = pd.DataFrame({
+                'S': S_series,
                 'payoff': payoff_series,
                 'delta': delta_series,
                 'gamma': gamma_series,
@@ -73,6 +74,7 @@ class Strategies:
             eg = Extract_Greeks(K=K, imp_vol=imp_vol, rf=self.rf, maturity=self.expiry,
                                 option_category=option_category, q=self.q, current_date=None)
             greeks = {
+                'Strike': K,
                 'delta': eg.delta(S=S),
                 'gamma': eg.gamma(S=S),
                 'vega': eg.vega(S=S),
@@ -92,6 +94,7 @@ class Strategies:
             return None
     def _compute_zakamouline_band(self, eg, S, spread, option_gamma):
         """Compute the Zakamouline delta band given an Extract_Greeks object."""
+        spread = min(spread, 0.018)
         try:
             return eg.zakamouline_delta_band(S=S, spread=spread, option_gamma=option_gamma)
         except Exception as e:
@@ -161,7 +164,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                    vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -227,7 +230,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                    vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -292,7 +295,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                    vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -358,7 +361,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                    vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -451,7 +454,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -545,7 +548,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -639,7 +642,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -733,7 +736,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -840,7 +843,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -947,7 +950,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1025,7 +1028,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1099,7 +1102,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1178,7 +1181,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1257,7 +1260,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1348,7 +1351,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None
@@ -1439,7 +1442,7 @@ class Strategies:
                 print(f"Error computing series values at underlying price {s}: {e}")
                 continue
 
-        payoff_json = self._build_payoff_dataframe(payoff_series, delta_series, gamma_series,
+        payoff_json = self._build_payoff_dataframe(S_array, payoff_series, delta_series, gamma_series,
                                                     vega_series, zak_lower_series, zak_upper_series)
         if payoff_json is None:
             return None

@@ -16,8 +16,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import json
 import datetime
-
-
 # ---------------------CONSTANTS------------------#
 # (No explicit constants defined here, but this section can be used for them if needed.)
 

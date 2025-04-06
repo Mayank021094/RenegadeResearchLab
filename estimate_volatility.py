@@ -191,7 +191,10 @@ class EstimateVolatility:
         :return: Annualized high-frequency volatility.
         """
         price_series = ExtractOptionsData().extracting_ohlc(ticker=self.ticker, category=self.category, **kwargs)
-        price_series['Date'] = price_series.index.date
+        try:
+            price_series['Date'] = price_series.index.date
+        except:
+            price_series['Date'] = price_series.index
         price_series['prev_close'] = price_series['close'].shift(1)
 
         # Identify the first entry of each day
@@ -215,17 +218,13 @@ class EstimateVolatility:
     def bsm_implied_volatility(mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
         """
         Calculate the implied volatility using the Black-Scholes-Merton model.
-
-        :param mkt_price: Market price of the option
-        :param S: Current stock price
-        :param K: Strike price
-        :param r: Risk-free interest rate
-        :param q: Dividend yield
-        :param maturity: Maturity date of the option
-        :param option_category: Type of option ('CE' for Call, 'PE' for Put)
-        :param current_date: Current date (default is today)
-        :return: Implied volatility or NaN if calculation fails
+        If the computed volatility is unrealistically low, return "flag".
         """
+        import datetime
+        import numpy as np
+        from scipy.optimize import brentq
+        import scipy.stats as si
+
         if current_date is None:
             current_date = datetime.date.today()
 
@@ -235,38 +234,57 @@ class EstimateVolatility:
 
         r = np.mean(rf['MIBOR Rate (%)'])
 
-        # if calendar_days < 14:
-        #     r = rf[rf['Tenor'] == 14]['MIBOR Rate (%)'].values[0]
-        # else:
-        #     x = np.array(rf['Tenor'])
-        #     y = np.array(rf['MIBOR Rate (%)'])
-        #     cs = CubicSpline(x, y)
-        #     r = cs(np.array(calendar_days))
-
         t1 = trading_days / 252  # Trading days to years
         t2 = calendar_days / 365  # Calendar days to years
 
         if t1 <= 0 or t2 <= 0:
             return np.nan
 
+        # --- Intrinsic value check ---
+        if option_category == 'CE':
+            intrinsic_value = max(S * np.exp(-q * t2) - K * np.exp(-r * t2), 0)
+        elif option_category == 'PE':
+            intrinsic_value = max(K * np.exp(-r * t2) - S * np.exp(-q * t2), 0)
+        else:
+            raise ValueError("Invalid option category. Use 'CE' for Call or 'PE' for Put.")
+
+        if mkt_price < intrinsic_value:
+            print("Market price is below intrinsic value.")
+            return "flag"
+
+        # --- End intrinsic value check ---
+
         def bsm_price(sigma):
             """Calculate the Black-Scholes-Merton option price."""
             d1 = (np.log(S / K) + (r - q) * t2 + 0.5 * sigma ** 2 * t1) / (sigma * np.sqrt(t1))
             d2 = d1 - sigma * np.sqrt(t1)
-
             if option_category == 'CE':
                 return S * np.exp(-q * t2) * si.norm.cdf(d1) - K * np.exp(-r * t2) * si.norm.cdf(d2)
             elif option_category == 'PE':
                 return K * np.exp(-r * t2) * si.norm.cdf(-d2) - S * np.exp(-q * t2) * si.norm.cdf(-d1)
-            else:
-                raise ValueError("Invalid option category. Use 'CE' for Call or 'PE' for Put.")
 
         def objective_function(sigma):
             """Objective function for root-finding."""
             return bsm_price(sigma) - mkt_price
 
+        # Define a small positive lower bound and an upper bound for sigma
+        sigma_low = 1e-6
+        sigma_high = 5
+
+        # Check if there is a sign change between the bounds
+        f_low = objective_function(sigma_low)
+        f_high = objective_function(sigma_high)
+        if f_low * f_high > 0:
+            print(f"No sign change between sigma_low={sigma_low} (f={f_low}) and sigma_high={sigma_high} (f={f_high}).")
+            return np.nan
+
         try:
-            implied_vol = brentq(objective_function, 0, 5)
+            implied_vol = brentq(objective_function, sigma_low, sigma_high)
+            # Check if the solution is unrealistically low (i.e., essentially at the lower bound)
+            min_acceptable_vol = 0.001  # You can adjust this threshold as needed
+            if implied_vol < min_acceptable_vol:
+                print("Implied volatility returned is too low, flagged.")
+                return "flag"
             return implied_vol
         except ValueError as e:
             print(f"Failed to find implied volatility: {e}")
@@ -453,7 +471,7 @@ class EstimateVolatility:
         })
         return df
 
-    def volatility_cones(self):
+    def cones(self, moment='vol'):
         """
         Calculates volatility cones using logarithmic returns and multiple rolling window sizes.
 
@@ -491,39 +509,53 @@ class EstimateVolatility:
 
             # Calculate logarithmic returns and store them in the DataFrame.
             cones_df['ln_returns'] = (self.cones_data['close'] / self.cones_data['close'].shift(1)).apply(np.log)
-            cones_df = cones_df.dropna(inplace=True)
+            cones_df.dropna(inplace=True)  # Corrected: remove assignment here.
 
             # Define the rolling windows (in days) for volatility calculations.
             windows = [20, 40, 60, 120, 240]
             for window in windows:
-                # Calculate the rolling standard deviation of the logarithmic returns.
-                rolling_std = cones_df['ln_returns'].rolling(window=window).std()
+                if moment == 'vol':
+                    rolling_std = cones_df['ln_returns'].rolling(window=window).std()
+                    try:
+                        scaling = math.sqrt(DEFAULT_TRADING_PERIODS)
+                    except NameError:
+                        raise NameError("DEFAULT_TRADING_PERIODS is not defined.")
 
-                # Ensure DEFAULT_TRADING_PERIODS is defined.
-                try:
-                    scaling = math.sqrt(DEFAULT_TRADING_PERIODS)
-                except NameError:
-                    raise NameError("DEFAULT_TRADING_PERIODS is not defined.")
+                    try:
+                        m_value = func_m(window, len(cones_df['ln_returns']))
+                    except ValueError as ve:
+                        raise ValueError(f"Error computing scaling factor for window {window}: {ve}")
 
-                # Compute the scaling factor for the current window.
-                try:
-                    m_value = func_m(window, len(cones_df['ln_returns']))
-                except ValueError as ve:
-                    raise ValueError(f"Error computing scaling factor for window {window}: {ve}")
+                    cones_df[f'{window}_day'] = rolling_std * scaling * m_value
 
-                # Compute the volatility and store it in a new column.
-                cones_df[f'{window}_day_vol'] = rolling_std * scaling * m_value
+                elif moment == 'skew':
+                    rolling_skew = cones_df['ln_returns'].rolling(window=window).skew()
+                    try:
+                        trading_days = DEFAULT_TRADING_PERIODS  # Typically 252
+                    except NameError:
+                        trading_days = 252
+                    scaling = 1 / math.sqrt(trading_days)
+                    cones_df[f'{window}_day'] = rolling_skew * scaling
 
-            # Remove any rows with NaN values resulting from the rolling window calculations.
+                elif moment == 'kurt':
+                    rolling_excess_kurt = cones_df['ln_returns'].rolling(window=window).kurt()
+                    try:
+                        trading_days = DEFAULT_TRADING_PERIODS  # Typically 252
+                    except NameError:
+                        trading_days = 252
+                    scaling = 1 / trading_days
+                    cones_df[f'{window}_day'] = rolling_excess_kurt * scaling
+
+                else:
+                    raise ValueError(f"Error computing cones for {moment}. Please enter vol/skew/kurt")
+
             cones_df.dropna(inplace=True)
-
-            # Return the DataFrame with volatility cones.
             return cones_df
 
         except Exception as e:
-            # Print the error message for debugging and return an empty DataFrame.
             print(f"An error occurred in volatility_cones: {e}")
             return pd.DataFrame()
+
 # -------------------- USAGE -------------------#
 # if __name__ == "__main__":
 #     # Example usage

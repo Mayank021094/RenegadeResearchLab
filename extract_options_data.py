@@ -123,10 +123,10 @@ class ExtractOptionsData:
 
         # The returned MultiIndex often has the symbol in the first level; drop it for clarity
         data.index = data.index.droplevel('symbol')
-
+        data.index = data.index.map(lambda x: x.date() if hasattr(x, 'date') else x)
         return data
-
-    def extracting_dividend_yield(self, ticker, category, **kwargs):
+    @staticmethod
+    def extracting_dividend_yield(ticker, category, **kwargs):
         """
         Extracts the dividend yield for a given ticker based on its asset category.
 
@@ -142,7 +142,7 @@ class ExtractOptionsData:
         # Determine the correct ticker format based on asset category.
         if category == 'equity':
             # Append the '.NS' suffix for equities traded on the NSE.
-            self.ticker = ticker + '.NS'
+            ticker = ticker + '.NS'
         elif category == 'index':
             # Mapping for known index tickers.
             index_mapping = {
@@ -153,7 +153,7 @@ class ExtractOptionsData:
                 'NIFTYNXT50': '^NSMIDCP'
             }
             if ticker in index_mapping:
-                self.ticker = index_mapping[ticker]
+                ticker = index_mapping[ticker]
             else:
                 # If the provided index ticker is not recognized, print an error and exit.
                 print("⚠️ Error: Unknown index ticker provided.")
@@ -164,7 +164,7 @@ class ExtractOptionsData:
             return 0
 
         # Create a yfinance Ticker object.
-        stock = yf.Ticker(self.ticker)
+        stock = yf.Ticker(ticker)
 
         try:
             # Try to retrieve the dividend yield from the stock info.
