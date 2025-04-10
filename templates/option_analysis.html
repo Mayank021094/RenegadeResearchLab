@@ -1,0 +1,158 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Option Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        /* Alignments for header and navbar */
+        .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid #000; /* Adds a clear separation line */
+            padding-bottom: 10px; /* Adds space below header */
+            margin-bottom: 20px; /* Adds space before the navbar */
+        }
+        /* Note: The following selector should be written with a dot before btn-success */
+        .btn.btn-success {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header and Navbar Section -->
+    <div class="container">
+        {% include "header_after_login.html" %}
+    </div>
+
+    <div class="container">
+      <div class="d-flex justify-content-between align-items-center pt-3 pb-2 mb-3 border-bottom">
+        <h5 class="custom-heading ps-3">{{ ticker }}</h5>
+        <h5 class="custom-heading shift-right pe-3">{{ expiry }}</h5>
+      </div>
+    </div>
+
+    <div class="container mt-4">
+      <!-- Dropdown container: right aligned with a fixed width of 25% -->
+      <div class="d-flex justify-content-end">
+        <div style="width: 25%;">
+          <select id="chartSelector" class="form-select" aria-label="Select a Chart">
+            <option value="vol_cone">Volatility Cone</option>
+            <option value="skew_cone">Skewness Cone</option>
+            <option value="kurt_cone">Kurtosis Cone</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Chart display container -->
+      <div id="chartContainer" class="mt-4">
+        <!-- Each chart is in its own container.
+             The initial state shows vol_cone; skew and kurt are hidden using d-none. -->
+        <div id="vol_cone_chart">
+          {{ vol_cone | safe }}
+        </div>
+        <div id="skew_cone_chart" class="d-none">
+          {{ skew_cone | safe }}
+        </div>
+        <div id="kurt_cone_chart" class="d-none">
+          {{ kurt_cone | safe }}
+        </div>
+      </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const chartSelector = document.getElementById('chartSelector');
+      const volCone = document.getElementById('vol_cone_chart');
+      const skewCone = document.getElementById('skew_cone_chart');
+      const kurtCone = document.getElementById('kurt_cone_chart');
+
+      chartSelector.addEventListener('change', function() {
+        // Hide all charts.
+        volCone.classList.add('d-none');
+        skewCone.classList.add('d-none');
+        kurtCone.classList.add('d-none');
+
+        // Show the selected chart container.
+        if (chartSelector.value === 'vol_cone') {
+          volCone.classList.remove('d-none');
+        } else if (chartSelector.value === 'skew_cone') {
+          skewCone.classList.remove('d-none');
+        } else if (chartSelector.value === 'kurt_cone') {
+          kurtCone.classList.remove('d-none');
+        }
+
+        // We avoid repeated Plotly.Plots.resize calls here since the charts
+        // were rendered with fixed dimensions (responsive: false).
+        // If needed, you may call resize once on the shown element:
+        // setTimeout(() => {
+        //   const plotEl = document.querySelector('#chartContainer .js-plotly-plot:not(.d-none)');
+        //   if (plotEl) Plotly.Plots.resize(plotEl);
+        // }, 300);
+      });
+    });
+    </script>
+<!--    <div>-->
+<!--        {{ vol_cone | safe }}-->
+<!--    </div>-->
+<!--    <div>-->
+<!--        {{ skew_cone | safe }}-->
+<!--    </div>-->
+<!--    <div>-->
+<!--        {{ kurt_cone | safe }}-->
+<!--    </div>-->
+
+    <div class="container mt-4">
+        <table class="table table-bordered text-center align-middle">
+            <thead>
+            <tr>
+                <th scope="col">Estimator</th>
+                <th scope="col">Point Forecast</th>
+                <th scope="col">90% CI Lower Limit</th>
+                <th scope="col">90% CI Upper Limit</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in est_data %}
+            <tr>
+                <td>{{ row['Estimator'] }}</td>
+                <td>
+                    {% if row['Point Forecast'] == '-' or row['Point Forecast'] == 0 or row['Point Forecast'] == '0' %}
+                        -
+                    {% elif row['Estimator'] in ['Corrado-Su Implied Skewness', 'Corrado-Su Implied Kurtosis'] %}
+                        {{ row['Point Forecast']|round(2) }}
+                    {% else %}
+                        {{ (row['Point Forecast']|float * 100)|round(2) }}%
+                    {% endif %}
+                </td>
+                <td>
+                    {% if row['90% CI Lower Limit'] == '-' or row['90% CI Lower Limit'] == 0 or row['90% CI Lower Limit'] == '0' %}
+                        -
+                    {% elif row['Estimator'] in ['Corrado-Su Implied Skewness', 'Corrado-Su Implied Kurtosis'] %}
+                        {{ row['90% CI Lower Limit']|round(2) }}
+                    {% else %}
+                        {{ (row['90% CI Lower Limit']|float * 100)|round(2) }}%
+                    {% endif %}
+                </td>
+                <td>
+                    {% if row['90% CI Upper Limit'] == '-' or row['90% CI Upper Limit'] == 0 or row['90% CI Upper Limit'] == '0' %}
+                        -
+                    {% elif row['Estimator'] in ['Corrado-Su Implied Skewness', 'Corrado-Su Implied Kurtosis'] %}
+                        {{ row['90% CI Upper Limit']|round(2) }}
+                    {% else %}
+                        {{ (row['90% CI Upper Limit']|float * 100)|round(2) }}%
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- Render the Plotly Figures -->
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</body>
+</html>

@@ -14,23 +14,45 @@ import datetime
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ---------------------CONSTANTS------------------#
-API_KEY = ''  # Your Kite API key
-CLIENT_ID = 'CCC807'  # Your client ID
+#API_KEY = ''  # Your Kite API key - ensure this is set
+#CLIENT_ID = 'CCC807'  # Your client ID
 
 
 # --------------------MAIN CODE-------------------#
 class Zerodha_Api:
-    def __init__(self, api_secret_key, wait_timeout=300):
+    def __init__(self, api_key, api_secret_key, client_id, wait_timeout=300):
         """
         Initializes the Zerodha_Api instance with the API credentials,
         and generates a session with a configurable timeout.
         """
-        self.api_key = API_KEY
-        self.client_id = CLIENT_ID
-        self.wait_timeout = wait_timeout  # Timeout in seconds for waiting the token in the URL
+        # Check that the API key is provided
+        self.api_key = api_key
+        if not self.api_key:
+            logging.error("API_KEY is not set. Please set your Kite API key.")
+            raise ValueError("API_KEY is not set.")
+
+        # Check that the client ID is provided
+        self.client_id = client_id
+        if not self.client_id:
+            logging.error("CLIENT_ID is not set. Please set your client ID.")
+            raise ValueError("CLIENT_ID is not set.")
+
+        # Check that the API secret key is provided
+        if not api_secret_key:
+            logging.error("API_SECRET_KEY is not set. Please set your Kite API secret key.")
+            raise ValueError("API_SECRET_KEY is not set.")
+
+        self.wait_timeout = wait_timeout  # Timeout in seconds for waiting for the token in the URL
         self.kite = None
         self.request_token = None
-        self.generate_session(api_secret_key)
+
+        # Attempt to generate the session and catch any errors
+        try:
+            self.generate_session(api_secret_key)
+        except Exception as e:
+            logging.exception("Failed to generate session during initialization.")
+            raise
+
     def generate_session(self, api_secret_key):
         """
         Opens the Kite login URL in a Chrome browser, waits for the request token in the URL,
@@ -39,22 +61,24 @@ class Zerodha_Api:
         try:
             self.kite = KiteConnect(api_key=self.api_key)
         except Exception as e:
-            logging.error("Failed to create KiteConnect instance: %s", e)
+            logging.exception("Failed to create KiteConnect instance")
             raise
 
-        # Set up Chrome options (no detach option so the browser will close automatically)
+        # Set up Chrome options
         chrome_options = Options()
-
+        # Uncomment below to run Chrome in headless mode if needed:
+        # chrome_options.add_argument('--headless')
         try:
             driver = webdriver.Chrome(options=chrome_options)
         except Exception as e:
-            logging.error("Failed to initialize Chrome WebDriver: %s", e)
+            logging.exception("Failed to initialize Chrome WebDriver")
             raise
 
         try:
-            driver.get(self.kite.login_url())
+            login_url = self.kite.login_url()
+            driver.get(login_url)
         except Exception as e:
-            logging.error("Failed to navigate to login URL: %s", e)
+            logging.exception("Failed to navigate to login URL")
             driver.quit()
             raise
 
@@ -63,7 +87,7 @@ class Zerodha_Api:
             wait = WebDriverWait(driver, self.wait_timeout)
             wait.until(lambda d: "request_token=" in d.current_url)
         except Exception as e:
-            logging.error("Timeout or error waiting for request token in URL: %s", e)
+            logging.exception("Timeout or error waiting for request token in URL")
             driver.quit()
             raise
 
@@ -79,7 +103,7 @@ class Zerodha_Api:
                 driver.quit()
                 raise ValueError("Request token not found in URL")
         except Exception as e:
-            logging.error("Error processing URL: %s", e)
+            logging.exception("Error processing URL")
             driver.quit()
             raise
 
@@ -90,73 +114,171 @@ class Zerodha_Api:
             self.kite.set_access_token(user["access_token"])
             logging.info("Session generated and access token set.")
         except Exception as e:
-            logging.error("Error generating session with KiteConnect: %s", e)
+            logging.exception("Error generating session with KiteConnect")
             raise
-    def extract_instrument_token(self, name, instrument_type, expiry, strike):
+
+    @staticmethod
+    def extract_instrument_token(name, instrument_type, expiry=None, strike=None):
         """
         Extracts the instrument token from the instruments CSV by filtering based on
-        the provided criteria: name, instrument type, expiry date, and strike value.
+        the provided criteria: name, instrument type, and optionally expiry date and strike value.
 
         Parameters:
             name (str): The name of the instrument.
             instrument_type (str): The type of the instrument.
-            expiry (datetime.date): The expiry date of the instrument.
-            strike (float): The strike price of the instrument.
+            expiry (datetime.date, optional): The expiry date of the instrument. Defaults to None.
+            strike (float, optional): The strike price of the instrument. Defaults to None.
+
+        Returns:
+            tradingsymbol (str): The trading symbol corresponding to the instrument.
         """
-        # Load instrument data from the CSV URL.
-        # The parse_dates parameter ensures that date columns are parsed automatically.
-        instrument_df = pd.read_csv("https://api.kite.trade/instruments", parse_dates=True)
+        try:
+            instrument_df = pd.read_csv("https://api.kite.trade/instruments", parse_dates=True)
+        except Exception as e:
+            logging.exception("Failed to load instruments CSV")
+            raise
 
-        # Convert the 'expiry' column to datetime.date objects.
-        instrument_df['expiry'] = pd.to_datetime(instrument_df['expiry']).dt.date
+        # Ensure the CSV contains the necessary columns
+        required_columns = {'name', 'instrument_type', 'expiry', 'strike', 'tradingsymbol'}
+        if not required_columns.issubset(instrument_df.columns):
+            msg = "CSV is missing one or more required columns: " + ", ".join(required_columns)
+            logging.error(msg)
+            raise ValueError(msg)
 
-        # Filter the DataFrame to select the row that matches the provided criteria.
-        filtered_df = instrument_df[
-            (instrument_df['name'] == name) &
-            (instrument_df['instrument_type'] == instrument_type) &
-            (instrument_df['expiry'] == expiry) &
-            (instrument_df['strike'] == strike)
-            ]
+        try:
+            # Convert the 'expiry' column to datetime.date objects.
+            instrument_df['expiry'] = pd.to_datetime(instrument_df['expiry']).dt.date
+        except Exception as e:
+            logging.exception("Error converting expiry column to datetime.date")
+            raise
 
-        # Check if any matching instrument is found.
+        # Build the mask for filtering
+        mask = (instrument_df['name'] == name) & (instrument_df['instrument_type'] == instrument_type)
+        if expiry is not None:
+            mask &= (instrument_df['expiry'] == expiry)
+        if strike is not None:
+            mask &= (instrument_df['strike'] == strike)
+
+        filtered_df = instrument_df[mask]
+
         if filtered_df.empty:
-            raise ValueError("No instrument found matching the given criteria.")
+            msg = "No instrument found matching the given criteria."
+            logging.error(msg)
+            raise ValueError(msg)
 
-        # Extract the instrument token from the first matching row.
-        # Using .iloc[0] ensures that we get the first match safely.
-        self.instrument_token = filtered_df.iloc[0]['instrument_token']
-        self.trading_symbol = filtered_df.iloc[0]['tradingsymbol']
-    def place_orders(self):
+        return filtered_df.iloc[0]['tradingsymbol']
+
+    def place_orders(self, trading_symbol='SETFNIFBK', exchange='NSE', transaction_type='BUY', quantity=1,
+                     variety='regular', order_type='MARKET',
+                     product='CNC', validity='DAY'):
         """
         Uses the active session (self.kite) to place orders.
-        Uncomment and modify the sample code below as needed.
+        Validates the input hyperparameters before order placement.
+
+        Hyperparameter allowed values:
+        - exchange: {'NSE', 'BSE', 'NFO', 'CDS', 'BCD', 'MCX'}
+        - quantity: must be numeric and greater than 0
+        - variety: {'regular', 'amo', 'co', 'iceberg', 'auction'}
+        - order_type: {'MARKET', 'LIMIT', 'SL', 'SL-M'}
+        - product: {'CNC', 'NRML', 'MIS', 'MTF'}
+        - validity: {'DAY', 'IOC', 'TTL'}
         """
         if not self.kite:
             logging.error("Session is not initialized. Cannot place orders.")
             raise ValueError("Session is not initialized")
 
-        # Sample order placement code (customize parameters as needed)
-        # try:
-        #     order_id = self.kite.place_order(
-        #         variety=self.kite.VARIETY_REGULAR,
-        #         exchange="NSE",
-        #         tradingsymbol="RELIANCE",
-        #         transaction_type=self.kite.TRANSACTION_TYPE_BUY,
-        #         quantity=1,
-        #         product=self.kite.PRODUCT_CNC,
-        #         order_type=self.kite.ORDER_TYPE_MARKET
-        #     )
-        #     logging.info("Order placed successfully. Order ID: %s", order_id)
-        # except Exception as e:
-        #     logging.error("Error placing order: %s", e)
-        #     raise
-        pass
+        # Validate 'exchange'
+        allowed_exchanges = {"NSE", "BSE", "NFO", "CDS", "BCD", "MCX"}
+        if exchange not in allowed_exchanges:
+            msg = f"Invalid exchange: '{exchange}'. Accepted values are: {allowed_exchanges}"
+            logging.error(msg)
+            raise ValueError(msg)
 
+        # Validate 'quantity'
+        if not isinstance(quantity, (int, float)) or quantity <= 0:
+            msg = f"Invalid quantity: '{quantity}'. Quantity must be a positive number."
+            logging.error(msg)
+            raise ValueError(msg)
 
-if __name__ == "__main__":
-    try:
-        # Replace 'your_api_secret' with your actual API secret key.
-        api = Zerodha_Api(api_secret_key="your_api_secret")
-        # api.place_orders()  # Uncomment this line to place orders after session creation.
-    except Exception as e:
-        logging.error("Error in Zerodha_Api: %s", e)
+        allowed_varieties = {"regular", "amo", "co", "iceberg", "auction"}
+        allowed_order_types = {"MARKET", "LIMIT", "SL", "SL-M"}
+        allowed_products = {"CNC", "NRML", "MIS", "MTF"}
+        allowed_validity = {"DAY", "IOC", "TTL"}
+
+        if variety not in allowed_varieties:
+            msg = f"Invalid variety: '{variety}'. Accepted values are: {allowed_varieties}"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        if order_type not in allowed_order_types:
+            msg = f"Invalid order_type: '{order_type}'. Accepted values are: {allowed_order_types}"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        if product not in allowed_products:
+            msg = f"Invalid product: '{product}'. Accepted values are: {allowed_products}"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        if validity not in allowed_validity:
+            msg = f"Invalid validity: '{validity}'. Accepted values are: {allowed_validity}"
+            logging.error(msg)
+            raise ValueError(msg)
+
+        try:
+            order_id = self.kite.place_order(
+                tradingsymbol=trading_symbol,
+                exchange=exchange,
+                transaction_type=transaction_type,
+                quantity=quantity,
+                variety=variety,
+                order_type=order_type,
+                product=product,
+                validity=validity
+            )
+            logging.info("Order placed. ID is: {}".format(order_id))
+            return order_id
+        except Exception as e:
+            logging.exception("Order placement failed")
+            raise
+
+    def order_history(self):
+        """
+        Retrieves the order history from the Kite session.
+
+        Returns:
+            orders (list/dict): The order history data as returned by KiteConnect.
+        """
+        if not self.kite:
+            logging.error("Session is not initialized. Cannot retrieve order history.")
+            raise ValueError("Session is not initialized")
+        try:
+            orders = self.kite.orders()
+            logging.info("Order history retrieved successfully.")
+            return orders
+        except Exception as e:
+            logging.exception("Failed to retrieve order history")
+            raise
+
+    def cancel_order(self, order_id, variety='regular'):
+        """
+        Cancels an order given its order ID.
+
+        Parameters:
+            order_id (str): The ID of the order to cancel.
+            variety (str): The variety of the order (default 'regular').
+
+        Returns:
+            cancel_response (dict): The response from the cancel order API call.
+        """
+        if not self.kite:
+            logging.error("Session is not initialized. Cannot cancel order.")
+            raise ValueError("Session is not initialized")
+        try:
+            cancel_response = self.kite.cancel_order(order_id=order_id, variety=variety)
+            logging.info("Order cancellation response: {}".format(cancel_response))
+            return cancel_response
+        except Exception as e:
+            logging.exception("Order cancellation failed")
+            raise
+

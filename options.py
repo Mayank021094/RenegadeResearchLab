@@ -20,6 +20,8 @@ def option_json():
     options_data = ExtractOptionsData()
     symbols = options_data.extract_available_option_symbols()
     # print(symbols)
+    if symbols.empty:
+        raise ValueError("No available option symbols found.")
 
     options_json = {}
     # Get risk-free rate data
@@ -57,6 +59,9 @@ def option_json():
         # Extract options chain data for calls and puts
         op_chain = ExtractOptionsChain(ticker=r['symbol'], category=r['category'])
         call_chain = op_chain.extract_call_data()
+        if call_chain.empty:
+            print("❌ Failed to extract Option Chain for symbol: {}".format(r['symbol']))
+            continue
         put_chain = op_chain.extract_put_data()
 
         q = ExtractOptionsData.extracting_dividend_yield(ticker=r['symbol'], category=r['category'])

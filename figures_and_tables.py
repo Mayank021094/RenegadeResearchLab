@@ -18,17 +18,19 @@ def edge_table(options_json):
     for s in symbols:
         expiry_list = options_json['NIFTY']['CE'].keys()
         for expiry in expiry_list:
-            data.append({
-                'symbol': f"{s}",
-                'Maturity': expiry,
-                'edge': options_json[s]['CE'][expiry]['implied_moments']['edge']
-            })
+            try:
+                data.append({
+                    'Symbol': f"{s}",
+                    'Maturity': expiry,
+                    'Edge': options_json[s]['CE'][expiry]['implied_moments']['edge']
+                })
+            except:
+                print(s)
+                continue
     edge_df = pd.DataFrame(data)
-    edge_df = edge_df.sort_values(by='edge', ascending=False)
+    edge_df = edge_df.sort_values(by='Edge', ascending=False)
 
     return edge_df
-
-
 def estimator_table(symbol_json, expiry):
     cones_list = ['Volatility_Cones_df', 'Skewness_Cones_df', 'Kurtosis_Cones_df']
     estimators = symbol_json['realized_volatility'].keys()

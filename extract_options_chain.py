@@ -51,22 +51,92 @@ class ExtractOptionsChain:
 
     def extract_option_chain(self, max_retries=5, delay=5):
         """
-        Fetch the option chain data from NSE using Selenium.
+        Fetch the option chain data from NSE by first trying HTTP requests,
+        and falling back to Selenium if necessary.
 
-        :param max_retries: Maximum number of attempts if fetching fails
-        :param delay: Time (in seconds) to wait between retries
-        :return: None (the JSON data is stored in self.data)
+        This function uses two methods:
+        1. Direct HTTP Requests (preferred method)
+        2. Selenium-based extraction (fallback method)
+
+        If both methods fail after multiple attempts, self.data is set to None.
         """
-        # Construct the appropriate URL based on whether it's an index or equity
+        # Construct the URL based on whether the category is 'index' or 'equity'
         url = self.url_index + self.ticker if self.category == 'index' else self.url_equity + self.ticker
+        baseurl = 'https://www.nseindia.com/'
 
+        # ===================== Method 1: Direct HTTP Requests (Preferred) =====================
+        # Prepare a list of user agent strings to bypass basic bot protection
+        user_agent_list = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/20100101 Firefox/77.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
+        ]
+
+        # Randomize headers to simulate different browser requests
+        headers = {
+            "user-agent": random.choice(user_agent_list),
+            "accept-language": "en,gu;q=0.9,hi;q=0.8",
+            "accept-encoding": "gzip, deflate, br",
+            "referer": "https://www.nseindia.com",
+            "connection": "keep-alive",
+            "DNT": "1",
+            "sec-fetch-mode": "navigate"
+        }
+
+        session = requests.Session()
+
+        # Attempt multiple retries using HTTP requests
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Access the base URL to set cookies
+                initial_request = session.get(baseurl, headers=headers, timeout=5)
+                cookies = dict(initial_request.cookies)
+
+                # Fetch the option chain data using the cookies
+                response = session.get(url, headers=headers, timeout=10, cookies=cookies)
+
+                # Check for successful HTTP response
+                if response.status_code != 200:
+                    print(f"HTTP Request - Attempt {attempt}/{max_retries} failed. Status Code: {response.status_code}")
+                    time.sleep(delay)
+                    continue
+
+                # If the response contains HTML, it may indicate bot detection
+                if "<html>" in response.text.lower():
+                    print(
+                        f"HTTP Request - Attempt {attempt}/{max_retries}: Received HTML content, likely due to bot detection. Retrying...")
+                    time.sleep(delay)
+                    continue
+
+                # Try to parse the response as JSON
+                try:
+                    self.data = response.json()
+                    print("✅ Data fetched successfully via HTTP requests!")
+                    return  # Exit the function if successful
+                except ValueError as json_err:
+                    print(f"HTTP Request - Attempt {attempt}/{max_retries}: JSON decoding error: {json_err}")
+                    print("Response snippet (first 500 characters):", response.text[:500])
+                    time.sleep(delay)
+
+            except requests.exceptions.RequestException as req_err:
+                print(
+                    f"HTTP Request - Attempt {attempt}/{max_retries}: Network error: {req_err}. Retrying in {delay} seconds...")
+                time.sleep(delay)
+
+        print("❌ HTTP Requests method failed. Switching to Selenium-based extraction...")
+
+        # ===================== Method 2: Selenium-Based Extraction (Fallback) =====================
+        # Initialize retries and the data variable
         retries = 0
         data = None
 
-        # Try multiple times to fetch the data
+        # Attempt multiple retries using Selenium
         while retries < max_retries:
             try:
-                # Use Chrome for the first three retries, then switch to Edge
+                # For the first few retries, use Chrome; if those fail, switch to Edge
                 if retries <= 3:
                     chrome_options = webdriver.ChromeOptions()
                     chrome_options.add_experimental_option('detach', True)
@@ -77,91 +147,35 @@ class ExtractOptionsChain:
                     edge_options.add_experimental_option('detach', True)
                     driver = webdriver.Edge(options=edge_options)
 
-                print(f"Attempt {retries + 1}: Fetching data from NSE...")
+                print(f"Selenium - Attempt {retries + 1}/{max_retries}: Fetching data from NSE...")
                 driver.get(url)
 
-                # Wait for the body element to appear, indicating the page is loaded
+                # Wait for the body element to appear, indicating the page has loaded
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
 
-                # Retrieve the page's text, which is expected to be JSON
+                # Retrieve the page's text, which is expected to be JSON data
                 json_text = driver.find_element(By.TAG_NAME, "body").text
                 data = json.loads(json_text)
-                print("✅ Data fetched successfully!")
+                print("✅ Data fetched successfully via Selenium!")
                 driver.quit()
-                break  # Exit loop if successful
+                self.data = data
+                return  # Exit function if successful
+
             except Exception as e:
-                # If an error occurs, close the driver, increment retries, and wait
-                driver.quit()
-                print(f"⚠️ Error fetching data: {e}")
+                # Ensure that the driver is closed before retrying
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                print(f"Selenium - Attempt {retries + 1}/{max_retries}: Error fetching data: {e}")
                 retries += 1
                 time.sleep(delay)
 
-        # If data is still None, it means all retries have failed
-        if not data:
-            print("❌ Failed to fetch data after multiple retries.")
-        self.data = data
-
-        # NOTE: The commented-out block below uses direct HTTP requests instead of Selenium
-        # and attempts to bypass NSE's bot-detection. It's not currently in use.
-
-        # baseurl = 'https://www.nseindia.com/'
-        #
-        # user_agent_list = [
-        #     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        #     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15',
-        #     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0',
-        #     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
-        #     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/20100101 Firefox/77.0',
-        #     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
-        # ]
-        #
-        # headers = {
-        #     # "user-agent":'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        #     "user-agent": random.choice(user_agent_list),
-        #     "accept-language": "en,gu;q=0.9,hi;q=0.8",
-        #     "accept-encoding": "gzip, deflate, br",
-        #     "referer": "https://www.nseindia.com",
-        #     "connection": "keep-alive",
-        #     "DNT": "1",
-        #     "sec-fetch-mode": "navigate"
-        # }
-        #
-        # session = requests.Session()
-        #
-        # for attempt in range(1, max_retries + 1):
-        #     try:
-        #         request = session.get(baseurl, headers=headers, timeout=5)
-        #         cookies = dict(request.cookies)
-        #         response = session.get(url, headers=headers, timeout=10, cookies=cookies)
-        #
-        #         if response.status_code != 200:
-        #             print(f"Attempt {attempt}/{max_retries} failed. Status Code: {response.status_code}")
-        #             time.sleep(delay)
-        #             continue
-        #
-        #         # Check if response is HTML instead of JSON (bot protection)
-        #         if "<html>" in response.text.lower():
-        #             print("⚠️ NSE detected bot activity. Retrying...")
-        #             time.sleep(delay)
-        #             continue
-        #
-        #         # Try parsing JSON
-        #         self.data = response.json()
-        #         return  # Exit if successful
-        #
-        #     except requests.exceptions.RequestException as e:
-        #         print(f"Network error: {e}. Retrying in {delay} seconds...")
-        #         time.sleep(delay)
-        #
-        #     except ValueError:  # JSON decode error
-        #         print(f"Attempt {attempt}/{max_retries} failed. Response is not JSON.")
-        #         print("Response Content (First 500 chars):", response.text[:500])  # Debugging
-        #         time.sleep(delay)
-        #
-        # print("❌ Failed to fetch options data after multiple retries.")
-        # self.data = None
+        # If both methods fail, set self.data to None and log the failure
+        print("❌ Failed to fetch options data after multiple attempts using both HTTP requests and Selenium.")
+        self.data = None
 
     def extract_call_data(self):
         """

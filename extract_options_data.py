@@ -31,67 +31,141 @@ class ExtractOptionsData:
         # Initialize with URL for NSE underlying information.
         self.url_underlying = "https://www.nseindia.com/api/underlying-information"
 
-    def extract_available_option_symbols(self, max_retries=5, delay=5):
-        # Extracts the list of available option symbols from NSE, including indices and equities.
-        # max_retries: Maximum number of attempts to fetch data.
-        # delay: Delay (in seconds) between retries.
+    def extract_available_option_symbols(self, max_retries=4, delay=5):
+        """
+        Extract the list of available option symbols from NSE, including both indices and equities.
+        This function first tries to fetch data using direct HTTP requests. If that fails,
+        it falls back to Selenium-based extraction.
 
+        :param max_retries: Maximum number of attempts to fetch data via each method.
+        :param delay: Time (in seconds) to wait between retries.
+        :return: A pandas DataFrame with columns: symbol, underlying, and category.
+        """
         url = self.url_underlying
-        retries = 0
         data = None
 
-        # Loop to attempt data fetching up to max_retries times
-        while retries <= max_retries:
+        # ===================== Method 1: Direct HTTP Requests (Preferred) =====================
+        # This block uses direct HTTP requests to fetch underlying information.
+        # It mimics a regular browser by using randomized user-agent headers,
+        # sets up a session to acquire cookies, and handles network errors, non-200 responses,
+        # HTML responses (indicative of bot detection), and JSON decode issues.
+        baseurl = 'https://www.nseindia.com/'
+        user_agent_list = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/20100101 Firefox/77.0',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36',
+        ]
+        headers = {
+            "user-agent": random.choice(user_agent_list),
+            "accept-language": "en,gu;q=0.9,hi;q=0.8",
+            "accept-encoding": "gzip, deflate, br",
+            "referer": "https://www.nseindia.com",
+            "connection": "keep-alive",
+            "DNT": "1",
+            "sec-fetch-mode": "navigate"
+        }
+
+        session = requests.Session()
+
+        for attempt in range(1, max_retries + 1):
             try:
-                # For the first 3 retries, use Chrome; afterwards, use Edge
-                if retries < 3:
-                    chrome_options = webdriver.ChromeOptions()
-                    chrome_options.add_experimental_option('detach', True)
-                    driver = webdriver.Chrome(options=chrome_options)
-                else:
-                    edge_options = webdriver.EdgeOptions()
-                    edge_options.use_chromium = True
-                    edge_options.add_experimental_option('detach', True)
-                    driver = webdriver.Edge(options=edge_options)
+                # Step 1: Hit the base URL to establish necessary cookies.
+                initial_request = session.get(baseurl, headers=headers, timeout=5)
+                cookies = dict(initial_request.cookies)
 
-                print(f"Attempt {retries + 1}: Fetching data from NSE...")
-                driver.get(url)
+                # Step 2: Use the acquired cookies to request the underlying information.
+                response = session.get(url, headers=headers, timeout=10, cookies=cookies)
 
-                # Wait until the body tag is present to ensure page is loaded
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
+                # Check for a non-successful HTTP status code.
+                if response.status_code != 200:
+                    print(f"HTTP Request - Attempt {attempt}/{max_retries} failed. Status Code: {response.status_code}")
+                    time.sleep(delay)
+                    continue
 
-                # Extract JSON content from the body of the page
-                json_text = driver.find_element(By.TAG_NAME, "body").text
-                data = json.loads(json_text)
-                print("✅ Data fetched successfully!")
-                driver.quit()
-                break  # Exit the loop if data fetched successfully
-            except Exception as e:
-                # If an error occurs, close the driver, print the error, increment retries, and wait
-                driver.quit()
-                print(f"⚠️ Error fetching data: {e}")
-                retries += 1
+                # If response contains HTML, NSE might be flagging bot activity.
+                if "<html>" in response.text.lower():
+                    print(
+                        f"HTTP Request - Attempt {attempt}/{max_retries}: Received HTML content (bot detection). Retrying...")
+                    time.sleep(delay)
+                    continue
+
+                # Try parsing the JSON response.
+                try:
+                    data = response.json()
+                    print("✅ Data fetched successfully via HTTP requests!")
+                    break  # Exit the retry loop if successful
+                except ValueError as json_err:
+                    print(f"HTTP Request - Attempt {attempt}/{max_retries}: JSON decoding error: {json_err}")
+                    print("Response snippet (first 500 chars):", response.text[:500])
+                    time.sleep(delay)
+            except requests.exceptions.RequestException as req_err:
+                print(
+                    f"HTTP Request - Attempt {attempt}/{max_retries}: Network error: {req_err}. Retrying in {delay} seconds...")
                 time.sleep(delay)
 
-        # If data remains None after all retries, return an empty DataFrame
+        # ===================== Method 2: Selenium-Based Extraction (Fallback) =====================
+        # If the HTTP method fails after all retries, fall back to Selenium.
         if not data:
-            print("⚠️ Error fetching available symbols.")
+            print("❌ HTTP Requests method failed. Switching to Selenium-based extraction...")
+            retries = 0
+            while retries <= max_retries:
+                try:
+                    # Use Chrome for the first few retries; if those fail, switch to Edge.
+                    if retries < 3:
+                        chrome_options = webdriver.ChromeOptions()
+                        chrome_options.add_experimental_option('detach', True)
+                        driver = webdriver.Chrome(options=chrome_options)
+                    else:
+                        edge_options = webdriver.EdgeOptions()
+                        edge_options.use_chromium = True
+                        edge_options.add_experimental_option('detach', True)
+                        driver = webdriver.Edge(options=edge_options)
+
+                    print(f"Selenium - Attempt {retries + 1}/{max_retries}: Fetching data from NSE...")
+                    driver.get(url)
+
+                    # Wait until the page's body tag is present to ensure that the page has loaded.
+                    WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.TAG_NAME, "body"))
+                    )
+
+                    # Extract JSON content from the body.
+                    json_text = driver.find_element(By.TAG_NAME, "body").text
+                    data = json.loads(json_text)
+                    print("✅ Data fetched successfully via Selenium!")
+                    driver.quit()
+                    break  # Exit the loop if data is fetched successfully
+                except Exception as e:
+                    # Ensure the driver is closed if an error occurs.
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+                    print(f"Selenium - Attempt {retries + 1}/{max_retries}: Error fetching data: {e}")
+                    retries += 1
+                    time.sleep(delay)
+
+        # If both methods fail, return an empty DataFrame.
+        if not data:
+            print("⚠️ Error fetching available symbols after using both HTTP requests and Selenium.")
             return pd.DataFrame()
 
-        # Extract index and equity records from the JSON response
+        # ===================== Processing the Fetched Data =====================
+        # Extract index and equity records from the JSON response.
         index_records = data.get("data", {}).get("IndexList", [])
         equity_records = data.get("data", {}).get("UnderlyingList", [])
 
-        # Build tuples of (symbol, underlying, category)
+        # Build tuples of (symbol, underlying, category) filtering for valid records.
         index_symbols = [(d['symbol'], d['underlying'], 'index') for d in index_records if 'symbol' in d]
         equity_symbols = [(d['symbol'], d['underlying'], 'equity') for d in equity_records if 'symbol' in d]
 
-        # Combine index and equity symbols
+        # Combine the index and equity symbols.
         combined_symbols = index_symbols + equity_symbols
 
-        # Create a DataFrame with columns: symbol, underlying, and category
+        # Create a DataFrame with the extracted data.
         df_symbols = pd.DataFrame(combined_symbols, columns=['symbol', 'underlying', 'category'])
 
         return df_symbols
