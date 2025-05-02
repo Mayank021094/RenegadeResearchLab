@@ -19,7 +19,6 @@ def option_json():
     # Extract available option symbols using helper class
     options_data = ExtractOptionsData()
     symbols = options_data.extract_available_option_symbols()
-    # print(symbols)
     if symbols.empty:
         raise ValueError("No available option symbols found.")
 
@@ -31,7 +30,6 @@ def option_json():
 
     # Iterate over each symbol (unpacking index and row)
     for _, r in symbols.iterrows():
-        skip_symbol = False  # flag to mark if this symbol should be skipped
         symbols_json = {}
         symbols_json['underlying'] = r['underlying']
         symbols_json['category'] = r['category']
@@ -50,10 +48,7 @@ def option_json():
             'Skewness_Cones_df': vol_estimates.cones(moment='skew'),
             'Kurtosis_Cones_df': vol_estimates.cones(moment='kurt')
         }
-        cones_list = ['Volatility_Cones_df', 'Skewness_Cones_df', 'Kurtosis_Cones_df']
-        # Compute the mean of each volatility measure, excluding cones
-        means = [df.mean() for key, df in realized_vol_json.items() if key not in cones_list]
-        forecasted_realized_volatility = sum(means) / len(means)
+        forecasted_realized_volatility = realized_vol_json['GARCH(1,1)']
         symbols_json['realized_volatility'] = realized_vol_json
 
         # Extract options chain data for calls and puts
@@ -63,6 +58,9 @@ def option_json():
             print("❌ Failed to extract Option Chain for symbol: {}".format(r['symbol']))
             continue
         put_chain = op_chain.extract_put_data()
+        if put_chain.empty:
+            print("❌ Failed to extract Option Chain for symbol: {}".format(r['symbol']))
+            continue
 
         q = ExtractOptionsData.extracting_dividend_yield(ticker=r['symbol'], category=r['category'])
 
@@ -87,11 +85,9 @@ def option_json():
                     option_category='CE', q=q, current_date=None
                 )
                 if bsm_imp_vol == "flag":
-                    # Set the flag and break out of the expiry loop
-                    print(
-                        f"Skipping symbol {r['symbol']} for expiry {expiry} because market price is below intrinsic value.")
-                    skip_symbol = True
-                    break
+                    # Skip this expiry and continue with the next one
+                    print(f"Skipping expiry {expiry} for symbol {r['symbol']} because market price is below intrinsic value.")
+                    continue
                 else:
                     implied_moments_json['bsm_implied_vol'] = bsm_imp_vol
 
@@ -111,12 +107,9 @@ def option_json():
 
             except Exception as e:
                 print(f"❌ Error processing call option for expiry {expiry}: {e}")
+                continue
             expiry_ce_json['implied_moments'] = implied_moments_json
             ce_json[expiry] = expiry_ce_json
-
-        # If the flag is set during processing the call chain, skip this symbol entirely.
-        if skip_symbol:
-            continue
 
         # Process put options similarly
         for expiry in put_chain['expiryDate'].unique():
@@ -132,9 +125,8 @@ def option_json():
                     option_category='PE', q=q, current_date=None
                 )
                 if bsm_imp_vol == "flag":
-                    print(f"Skipping symbol {r['symbol']} for expiry {expiry} (put) due to intrinsic value issue.")
-                    skip_symbol = True
-                    break
+                    print(f"Skipping expiry {expiry} for symbol {r['symbol']} (put) due to intrinsic value issue.")
+                    continue
                 else:
                     implied_moments_json['bsm_implied_vol'] = bsm_imp_vol
 
@@ -153,12 +145,9 @@ def option_json():
                 ) / forecasted_realized_volatility
             except Exception as e:
                 print(f"❌ Error processing put option for expiry {expiry}: {e}")
+                continue
             expiry_pe_json['implied_moments'] = implied_moments_json
             pe_json[expiry] = expiry_pe_json
-
-        if skip_symbol:
-            # Skip processing the rest of the symbol if flag encountered in put chain as well.
-            continue
 
         # Strategies processing (if needed) can be added here as well.
         for expiry in call_chain['expiryDate'].unique():
@@ -188,10 +177,11 @@ def option_json():
         symbols_json['PE'] = pe_json
         symbols_json['strategies'] = strategies_json
 
-        # Add the symbol only if it hasn’t been flagged for skipping
+        # Add the symbol's data to the overall options JSON.
         options_json[r['symbol']] = symbols_json
 
     return options_json
+
 
 
 # ----------------Usage----------------------#

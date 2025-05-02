@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import numpy as np
 
 # ---------------------CONSTANTS------------------#
 DEFAULT_TRADING_PERIODS = 252  # Typical number of trading days in a year
@@ -31,6 +32,8 @@ def edge_table(options_json):
     edge_df = edge_df.sort_values(by='Edge', ascending=False)
 
     return edge_df
+
+
 def estimator_table(symbol_json, expiry):
     cones_list = ['Volatility_Cones_df', 'Skewness_Cones_df', 'Kurtosis_Cones_df']
     estimators = symbol_json['realized_volatility'].keys()
@@ -164,3 +167,164 @@ def plot_volatility_cone_plotly(cones_df, windows=[20, 40, 60, 120, 240], quanti
         margin=dict(l=50, r=50, t=50, b=50)
     )
     return fig
+
+
+def plot_payoff_chart(df, K, title):
+    # --- Assumptions:
+    # 1. df is a DataFrame with the required columns: 'S', 'payoff', 'delta',
+    #    'zak_lower_band', and 'zak_upper_band'.
+    # 2. K is defined beforehand. It can be a single value (e.g., 100) or a list/array
+    #    of strike prices (e.g., [95, 100, 105]).
+    # 3. title is defined, e.g., title = 'DataFrame Plot'
+
+    # Create separate columns for payoff above and below zero.
+    df['payoff_positive'] = df['payoff'].where(df['payoff'] > 0, np.nan)
+    df['payoff_negative'] = df['payoff'].where(df['payoff'] <= 0, np.nan)
+
+    # Create a figure with a secondary y-axis.
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Add the payoff traces on the primary y-axis.
+    fig.add_trace(
+        go.Scatter(
+            x=df['S'],
+            y=df['payoff_positive'],
+            mode='lines',
+            line=dict(color='green'),
+            fill='tozeroy',
+            name='Profit',
+            fillcolor='rgba(0,255,0,0.3)'
+        ),
+        secondary_y=False
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df['S'],
+            y=df['payoff_negative'],
+            mode='lines',
+            line=dict(color='red'),
+            name='Loss'
+        ),
+        secondary_y=False
+    )
+
+    # Add a horizontal line at y=0.
+    fig.add_shape(
+        type="line",
+        x0=df['S'].min(),
+        x1=df['S'].max(),
+        y0=0,
+        y1=0,
+        line=dict(color="black", dash="dash"),
+        xref="x",
+        yref="y"
+    )
+
+    # Plot additional metrics on the secondary y-axis (for delta and Zak bands).
+    fig.add_trace(
+        go.Scatter(
+            x=df['S'],
+            y=df['delta'],
+            mode='lines',
+            name='Delta'
+        ),
+        secondary_y=True
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df['S'],
+            y=df['zak_lower_band'],
+            mode='lines',
+            name="Zakamoulini's Lower Band"
+        ),
+        secondary_y=True
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df['S'],
+            y=df['zak_upper_band'],
+            mode='lines',
+            name="Zakamoulini's Upper Band"
+        ),
+        secondary_y=True
+    )
+
+    # Instead of adding vertical lines, find the corresponding payoff point for each strike
+    # and add a marker with text right on the payoff line.
+    marker_x = []
+    marker_y = []
+    marker_text = []
+    if isinstance(K, (list, np.ndarray)):
+        i = 1
+        for strike in K:
+            # Find the row where S is nearest to the strike
+            idx = (df['S'] - strike).abs().idxmin()
+            x_val = df.loc[idx, 'S']
+            y_val = df.loc[idx, 'payoff']
+            marker_x.append(x_val)
+            marker_y.append(y_val)
+            marker_text.append(f"<b>K{i}</b>")
+            i += 1
+    else:
+        idx = (df['S'] - K).abs().idxmin()
+        x_val = df.loc[idx, 'S']
+        y_val = df.loc[idx, 'payoff']
+        marker_x.append(x_val)
+        marker_y.append(y_val)
+        marker_text.append(f"<b>K = {K}</b>")
+
+    # Add a scatter trace with markers and text for the strike points.
+    fig.add_trace(
+        go.Scatter(
+            x=marker_x,
+            y=marker_y,
+            mode='markers+text',
+            marker=dict(color='LightSkyBlue', size=8, line=dict(width=2,
+                                        color='DarkSlateGrey')),
+            text=marker_text,
+            textposition='top center',
+            showlegend=False
+        ),
+        secondary_y=False
+    )
+
+    # Update layout: set a white background and disable the legend.
+    fig.update_layout(
+        title=dict(
+            text=title,
+            font=dict(family="Arial Black", size=18, color="black")
+        ),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False
+    )
+
+    # Remove vertical grid lines by disabling gridlines on the x-axis.
+    fig.update_xaxes(showgrid=False)
+
+    # Update y-axes:
+    # For the primary y-axis (payoff), enable horizontal grid lines.
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        secondary_y=False,
+        title_text='Payoff',
+        title_font=dict(family="Arial Black", size=14, color="black")
+    )
+
+    # For the secondary y-axis (delta), disable grid lines so that the horizontal grid
+    # (from the primary y-axis) appears as a unified set.
+    fig.update_yaxes(
+        showgrid=False,
+        secondary_y=True,
+        title_text='Delta',
+        title_font=dict(family="Arial Black", size=14, color="black")
+    )
+
+    return fig
+
+

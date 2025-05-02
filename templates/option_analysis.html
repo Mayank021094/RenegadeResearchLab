@@ -149,6 +149,16 @@
             {% endfor %}
             </tbody>
         </table>
+        <div class="d-flex justify-content-center gap-2 mb-5">
+          <a href="{{ url_for('options') }}" class="d-flex align-items-center justify-content-center flex-fill btn btn-outline-secondary btn-lg px-4 rounded-pill">
+              ← Back
+          </a>
+          <a href="{{ url_for('options_strategy_analysis', ticker=ticker, expiry=expiry) }}"
+             class="d-flex align-items-center justify-content-center flex-fill btn btn-primary btn-lg px-4 rounded-pill">
+            Strategies ➜
+          </a>
+        </div>
+
     </div>
     <!-- Render the Plotly Figures -->
 </div>

@@ -155,7 +155,7 @@ class Extract_Greeks:
         else:
             raise ValueError("option_category must be 'CE' (call) or 'PE' (put)")
 
-        return theta
+        return theta/365
 
     def zakamouline_delta_band(self, S, spread=0, option_gamma=0):
         """

@@ -9,13 +9,16 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from requests.exceptions import ConnectionError, Timeout, RequestException
 import datetime
+import json
+import yfinance as yf
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 # ---------------------CONSTANTS------------------#
-#API_KEY = ''  # Your Kite API key - ensure this is set
-#CLIENT_ID = 'CCC807'  # Your client ID
+# API_KEY = ''  # Your Kite API key - ensure this is set
+# CLIENT_ID = 'CCC807'  # Your client ID
 
 
 # --------------------MAIN CODE-------------------#
@@ -116,6 +119,102 @@ class Zerodha_Api:
         except Exception as e:
             logging.exception("Error generating session with KiteConnect")
             raise
+
+    def extract_available_symbols(self, current_date=None):
+
+        # 1. Fetch instruments
+        try:
+            fno_inst = self.kite.instruments(exchange="NFO")
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Kite API error: {e}")
+            return pd.DataFrame()  # or raise
+
+        # 2. Build DataFrame
+        try:
+            fno_df = pd.DataFrame(fno_inst)
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Failed to create DataFrame: {e}")
+            return pd.DataFrame()
+
+        # 3. Filter for options CE/PE
+        try:
+            options_df = fno_df[fno_df['instrument_type'].isin(['CE', 'PE'])]
+        except KeyError as e:
+            logging.error(f"[extract_available_symbols] Missing column: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Error filtering instrument_type: {e}")
+            return pd.DataFrame()
+
+        # 4. Filter by expiry window
+        try:
+
+            if current_date == None:
+                today = pd.Timestamp.now().normalize()
+            else:
+                today = current_date
+            # parse expiry safely (invalid parse → NaT)
+            expiries = pd.to_datetime(options_df['expiry'], errors='coerce')
+            mask = (
+                    (expiries > today + pd.Timedelta(days=3)) &
+                    (expiries < today + pd.Timedelta(days=60))
+            )
+            options_df = options_df[mask]
+            self.options_df = options_df
+        except KeyError as e:
+            logging.error(f"[extract_available_symbols] Missing expiry column: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Error filtering by expiry: {e}")
+            return pd.DataFrame()
+
+        # 5. Extract symbols & categorize
+        try:
+            symbols = options_df['name'].dropna().unique()
+            index_symbols = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50']
+            categories = [
+                'index' if s in index_symbols else 'equity'
+                for s in symbols
+            ]
+        except KeyError as e:
+            logging.error(f"[extract_available_symbols] Missing name column: {e}")
+            return pd.DataFrame()
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Error extracting symbols: {e}")
+            return pd.DataFrame()
+
+        # 6. Build result DataFrame
+        try:
+            symbols_df = pd.DataFrame({
+                'symbol': symbols,
+                'underlying': categories
+            })
+            return symbols_df
+        except Exception as e:
+            logging.error(f"[extract_available_symbols] Failed to build symbols_df: {e}")
+            return pd.DataFrame()
+
+    def extract_options_chain(self, ticker, category):
+
+        def f_cmp(ticker):
+            if ticker == 'NIFTY':
+                symbol = '^NSEI'
+            elif ticker == 'BANKNIFTY':
+                symbol = '^NSEBANK'
+            elif ticker == 'FINNIFTY':
+                symbol = 'NIFTY_FIN_SERVICE.NS'
+            elif ticker == 'MIDCPNIFTY':
+                symbol = 'NIFTY_MIDCAP_100.NS'
+            elif ticker == 'NIFTYNXT50':
+                symbol = '^NSMIDCP'
+            else:
+                symbol = ticker + '.NS'
+            yf_obj = yf.Ticker(symbol)
+            cmp = yf_obj.history(period='1d')['Close'][0]
+
+            return cmp
+
+        pass
 
     @staticmethod
     def extract_instrument_token(name, instrument_type, expiry=None, strike=None):
@@ -281,4 +380,3 @@ class Zerodha_Api:
         except Exception as e:
             logging.exception("Order cancellation failed")
             raise
-

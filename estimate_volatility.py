@@ -220,10 +220,6 @@ class EstimateVolatility:
         Calculate the implied volatility using the Black-Scholes-Merton model.
         If the computed volatility is unrealistically low, return "flag".
         """
-        import datetime
-        import numpy as np
-        from scipy.optimize import brentq
-        import scipy.stats as si
 
         if current_date is None:
             current_date = datetime.date.today()

@@ -14,7 +14,7 @@ from optimization import Optimization
 from options import option_json
 import pickle
 import json
-from figures_and_tables import edge_table, estimator_table, plot_volatility_cone_plotly
+from figures_and_tables import edge_table, estimator_table, plot_volatility_cone_plotly, plot_payoff_chart
 from plotly.io import to_html
 
 # --------------------- CONSTANTS ------------------#
@@ -222,7 +222,7 @@ _cached_edge_df = None
 def options():
     global _cached_options_json, _cached_edge_df
     if _cached_options_json is None:
-        # _cached_options_json = option_json()    <-- Uncomment this when you wish to calculate it on the fly
+        #_cached_options_json = option_json()    #<-- Uncomment this when you wish to calculate it on the fly
         with open("options_json_for_ui_testing_2.pkl", "rb") as file:
             _cached_options_json = pickle.load(file)
         # Note: Do not convert datetime objects to strings here;
@@ -231,7 +231,6 @@ def options():
     edge_data = list(_cached_edge_df.to_dict(orient="records"))
     enumerated_edge_data = list(enumerate(edge_data, start=1))
     return render_template("options.html", enumerated_edge_data=enumerated_edge_data)
-
 
 @app.route('/options/<string:ticker>/<expiry>', methods=['GET', 'POST'])
 @login_required
@@ -283,6 +282,84 @@ def option_analysis(ticker, expiry):
         skew_cone=skew_cone_html,
         kurt_cone=kurt_cone_html
     )
+
+
+@app.route('/options/<string:ticker>/<expiry>/strategies/', methods=['GET', 'POST'])
+@login_required
+def options_strategy_analysis(ticker, expiry):
+    global _cached_options_json
+
+    # Validate the expiry date format.
+    try:
+        expiry_date = dt.datetime.strptime(expiry, '%Y-%m-%d').date()
+    except ValueError as e:
+        flash("Invalid expiry date format. Expected YYYY-MM-DD.", "error")
+        return redirect(url_for('error_page'))  # Replace 'error_page' with your error route.
+
+    # Try loading the cached JSON if not already loaded.
+    try:
+        if _cached_options_json is None:
+            # _cached_options_json = option_json()  # Uncomment if calculating on the fly.
+            with open("options_json_for_ui_testing_2.pkl", "rb") as file:
+                _cached_options_json = pickle.load(file)
+    except (IOError, pickle.UnpicklingError) as e:
+        flash("Error loading options data: " + str(e), "error")
+        return redirect(url_for('error_page'))
+
+    options_json = _cached_options_json
+
+    # Check if the ticker exists in the options JSON.
+    if ticker not in options_json:
+        flash(f"Ticker '{ticker}' not found in data.", "error")
+        return redirect(url_for('error_page'))
+
+    symbols_json = options_json[ticker]
+
+    # Check if strategies exist for the given expiry.
+    if 'strategies' not in symbols_json or expiry_date not in symbols_json['strategies']:
+        flash(f"No strategies available for expiry: {expiry_date}.", "error")
+        return redirect(url_for('error_page'))
+
+    strategies_json = symbols_json['strategies'][expiry_date]
+    strategies = list(strategies_json.keys())
+    output_json = {}
+
+    for strat in strategies:
+        # Retrieve the greeks; skip strategy if missing.
+        try:
+            greeks = strategies_json[strat]['greeks']
+        except Exception as e:
+            app.logger.error(f"Missing greeks for strategy {strat}: {str(e)}")
+            continue
+
+        # Retrieve the strike value; default to 0 if not found.
+        K = greeks.get('Strike', 0)
+
+        # Retrieve the payoff DataFrame; skip if not found.
+        try:
+            df = strategies_json[strat]['payoff']['payoffs']
+        except Exception as e:
+            app.logger.error(f"Missing payoff data for strategy {strat}: {str(e)}")
+            continue
+
+        # Generate the payoff chart and convert it to an HTML snippet.
+        try:
+            fig = plot_payoff_chart(df=df, K=K, title=strat)
+            fig_html = fig.to_html(full_html=False, include_plotlyjs=False)
+        except Exception as e:
+            app.logger.error(f"Error generating plot for strategy {strat}: {str(e)}")
+            continue
+
+        output_json[strat] = {"greeks": greeks, "figure": fig_html}
+
+    if not output_json:
+        flash("No valid strategies found.", "warning")
+        return redirect(url_for('error_page'))
+
+    return render_template("options_strategies.html",
+                           ticker=ticker,
+                           expiry=expiry,
+                           strategies=output_json)
 
 if __name__ == "__main__":
     app.run(debug=True)

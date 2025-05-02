@@ -408,6 +408,7 @@ class Strategies:
             eg_long, _ = self._compute_base_greeks(K_1, imp_vol_k1, 'CE', S)
             eg_short, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'CE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = eg_long.delta(S=S) - eg_short.delta(S=S)
             gamma_long = eg_long.gamma(S=S)
             gamma_short = eg_short.gamma(S=S)
@@ -502,6 +503,7 @@ class Strategies:
             eg_long, _ = self._compute_base_greeks(K_1, imp_vol_k1, 'PE', S)
             eg_short, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = eg_long.delta(S=S) - eg_short.delta(S=S)
             gamma_long = eg_long.gamma(S=S)
             gamma_short = eg_short.gamma(S=S)
@@ -596,6 +598,7 @@ class Strategies:
             eg_long, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'CE', S)   # long call leg
             base_greeks = {}
             # For bear call spread, portfolio Greeks = long call (OTM) minus short call (ITM)
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = eg_long.delta(S=S) - eg_short.delta(S=S)
             gamma_long = eg_long.gamma(S=S)
             gamma_short = eg_short.gamma(S=S)
@@ -690,6 +693,7 @@ class Strategies:
             eg_long, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'PE', S)  # long put (ITM)
             eg_short, _ = self._compute_base_greeks(K_1, imp_vol_k1, 'PE', S)  # short put (OTM)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = eg_long.delta(S=S) - eg_short.delta(S=S)
             gamma_long = eg_long.gamma(S=S)
             gamma_short = eg_short.gamma(S=S)
@@ -789,6 +793,7 @@ class Strategies:
             eg_short, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'CE', S)
             eg_k3, _ = self._compute_base_greeks(K_3, imp_vol_k3, 'CE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2, K_3]
             base_greeks['delta'] = eg_k1.delta(S=S) + eg_k3.delta(S=S) - 2 * eg_short.delta(S=S)
             gamma_k1 = eg_k1.gamma(S=S)
             gamma_k3 = eg_k3.gamma(S=S)
@@ -896,6 +901,7 @@ class Strategies:
             eg_short, _ = self._compute_base_greeks(K_2, imp_vol_k2, 'PE', S)
             eg_k3, _ = self._compute_base_greeks(K_3, imp_vol_k3, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2, K_3]
             base_greeks['delta'] = eg_k1.delta(S=S) + eg_k3.delta(S=S) - 2 * eg_short.delta(S=S)
             gamma_k1 = eg_k1.gamma(S=S)
             gamma_k3 = eg_k3.gamma(S=S)
@@ -986,6 +992,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = K
             base_greeks['delta'] = eg_call.delta(S=S) + eg_put.delta(S=S)
             base_greeks['gamma'] = eg_call.gamma(S=S) + eg_put.gamma(S=S)
             base_greeks['vega'] = eg_call.vega(S=S) + eg_put.vega(S=S)
@@ -1064,6 +1071,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = K
             base_greeks['delta'] = - (eg_call.delta(S=S) + eg_put.delta(S=S))
             base_greeks['gamma'] = - (eg_call.gamma(S=S) + eg_put.gamma(S=S))
             base_greeks['vega'] = - (eg_call.vega(S=S) + eg_put.vega(S=S))
@@ -1139,6 +1147,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = K
             base_greeks['delta'] = eg_call.delta(S=S) + 2 * eg_put.delta(S=S)
             base_greeks['gamma'] = eg_call.gamma(S=S) + 2 * eg_put.gamma(S=S)
             base_greeks['vega'] = eg_call.vega(S=S) + 2 * eg_put.vega(S=S)
@@ -1218,6 +1227,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = K
             base_greeks['delta'] = 2 * eg_call.delta(S=S) + eg_put.delta(S=S)
             base_greeks['gamma'] = 2 * eg_call.gamma(S=S) + eg_put.gamma(S=S)
             base_greeks['vega'] = 2 * eg_call.vega(S=S) + eg_put.vega(S=S)
@@ -1307,6 +1317,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K_2, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K_1, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = eg_call.delta(S=S) + eg_put.delta(S=S)
             base_greeks['gamma'] = eg_call.gamma(S=S) + eg_put.gamma(S=S)
             base_greeks['vega'] = eg_call.vega(S=S) + eg_put.vega(S=S)
@@ -1398,6 +1409,7 @@ class Strategies:
             eg_call, _ = self._compute_base_greeks(K_2, imp_vol_call, 'CE', S)
             eg_put, _ = self._compute_base_greeks(K_1, imp_vol_put, 'PE', S)
             base_greeks = {}
+            base_greeks['strike'] = [K_1, K_2]
             base_greeks['delta'] = - (eg_call.delta(S=S) + eg_put.delta(S=S))
             base_greeks['gamma'] = - (eg_call.gamma(S=S) + eg_put.gamma(S=S))
             base_greeks['vega'] = - (eg_call.vega(S=S) + eg_put.vega(S=S))
