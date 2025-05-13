@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import math
 from extract_options_data import ExtractOptionsData
-from scipy.optimize import minimize, brentq
+from scipy.optimize import minimize, brentq, newton
 import scipy.optimize as opt
 from scipy.stats import norm
 import scipy.stats as si
@@ -13,6 +13,7 @@ from scipy.interpolate import CubicSpline
 from extract_options_chain import ExtractOptionsChain
 from extract_options_data import ExtractOptionsData
 from extract_rf import extract_risk_free_rate
+from typing import Literal
 
 warnings.filterwarnings('ignore')
 import datetime
@@ -46,6 +47,8 @@ class EstimateVolatility:
         if self.daily_data.empty:
             raise ValueError(f"No data found for ticker: {self.ticker} and category: {self.category}")
 
+    # --------------------------------------Historical Volatility---------------------------------------------
+
     def close_to_close(self, window=DEFAULT_WINDOW, trading_periods=DEFAULT_TRADING_PERIODS, clean=True):
         """
         Calculate close-to-close volatility.
@@ -55,10 +58,10 @@ class EstimateVolatility:
         :param clean: If True, drop NaN values from the result.
         :return: Annualized close-to-close volatility.
         """
-        if self.daily_data['close'].isnull().any():
+        if self.daily_data['Close'].isnull().any():
             raise ValueError("Close prices contain NaN values.")
 
-        log_return = (self.daily_data['close'] / self.daily_data['close'].shift(1)).apply(np.log)
+        log_return = (self.daily_data['Close'] / self.daily_data['Close'].shift(1)).apply(np.log)
         result = log_return.rolling(window=window, center=False).std() * math.sqrt(trading_periods)
 
         return result.dropna() if clean else result
@@ -75,12 +78,12 @@ class EstimateVolatility:
         price_data = self.daily_data
 
         # Calculate log returns
-        log_ho = (price_data['high'] / price_data['open']).apply(np.log)
-        log_lo = (price_data['low'] / price_data['open']).apply(np.log)
-        log_co = (price_data['close'] / price_data['open']).apply(np.log)
-        log_oc = (price_data['open'] / price_data['close'].shift(1)).apply(np.log)
+        log_ho = (price_data['High'] / price_data['Open']).apply(np.log)
+        log_lo = (price_data['Low'] / price_data['Open']).apply(np.log)
+        log_co = (price_data['Close'] / price_data['Open']).apply(np.log)
+        log_oc = (price_data['Open'] / price_data['Close'].shift(1)).apply(np.log)
         log_oc_sq = log_oc ** 2
-        log_cc = (price_data['close'] / price_data['close'].shift(1)).apply(np.log)
+        log_cc = (price_data['Close'] / price_data['Close'].shift(1)).apply(np.log)
         log_cc_sq = log_cc ** 2
 
         # Calculate components
@@ -105,7 +108,7 @@ class EstimateVolatility:
         :return: Annualized volatility using the Parkinson method.
         """
         price_data = self.daily_data
-        rs = (1.0 / (4.0 * math.log(2.0))) * ((price_data['high'] / price_data['low']).apply(np.log)) ** 2.0
+        rs = (1.0 / (4.0 * math.log(2.0))) * ((price_data['High'] / price_data['Low']).apply(np.log)) ** 2.0
 
         def f(v):
             return (trading_periods * v.mean()) ** 0.5
@@ -124,8 +127,8 @@ class EstimateVolatility:
         """
         price_data = self.daily_data
 
-        log_hl = (price_data['high'] / price_data['low']).apply(np.log)
-        log_co = (price_data['close'] / price_data['open']).apply(np.log)
+        log_hl = (price_data['High'] / price_data['Low']).apply(np.log)
+        log_co = (price_data['Close'] / price_data['Open']).apply(np.log)
         rs = 0.5 * log_hl ** 2 - (2 * math.log(2) - 1) * log_co ** 2
 
         def f(v):
@@ -145,9 +148,9 @@ class EstimateVolatility:
         """
         price_data = self.daily_data
 
-        log_ho = (price_data['high'] / price_data['open']).apply(np.log)
-        log_lo = (price_data['low'] / price_data['open']).apply(np.log)
-        log_co = (price_data['close'] / price_data['open']).apply(np.log)
+        log_ho = (price_data['High'] / price_data['Open']).apply(np.log)
+        log_lo = (price_data['Low'] / price_data['Open']).apply(np.log)
+        log_co = (price_data['Close'] / price_data['Open']).apply(np.log)
         rs = log_ho * (log_ho - log_co) + log_lo * (log_lo - log_co)
 
         def f(v):
@@ -155,31 +158,6 @@ class EstimateVolatility:
 
         result = rs.rolling(window=window, center=False).apply(func=f)
         return result.dropna() if clean else result
-
-    def garch(self, horizon=30, trading_periods=DEFAULT_TRADING_PERIODS):
-        """
-        Calculate volatility using a GARCH(1,1) model.
-
-        :param horizon: Forecast horizon for GARCH model.
-        :param trading_periods: Number of trading periods in a year for annualization.
-        :return: Annualized GARCH volatility forecast.
-        """
-        return_series = (self.daily_data['close'] / self.daily_data['close'].shift(1)).apply(np.log).dropna()
-        return_series = return_series * 100  # Scale for numerical stability
-
-        model = arch_model(return_series, vol='GARCH', p=1, q=1, dist='t').fit(disp='off')
-        forecast = model.forecast(horizon=horizon)
-        # Extract the volatility for the last day of the horizon
-        # This is the volatility over the entire horizon (e.g., 30 days)
-        horizon_volatility = np.sqrt(forecast.variance.iloc[:, -1]) / 100  # Undo scaling
-
-        # Convert horizon volatility to daily volatility
-        daily_volatility = horizon_volatility  # / np.sqrt(horizon)
-
-        # Annualize the daily volatility
-        annualized_volatility = daily_volatility * np.sqrt(trading_periods)
-
-        return annualized_volatility
 
     def high_frequency(self, clean=True, trading_period=DEFAULT_TRADING_PERIODS, **kwargs):
         """
@@ -195,15 +173,15 @@ class EstimateVolatility:
             price_series['Date'] = price_series.index.date
         except:
             price_series['Date'] = price_series.index
-        price_series['prev_close'] = price_series['close'].shift(1)
+        price_series['prev_close'] = price_series['Close'].shift(1)
 
         # Identify the first entry of each day
         first_of_day = price_series.groupby('Date').head(1).index
 
         # Compute log returns
-        price_series['return'] = np.log(price_series['close'] / price_series['prev_close'])
+        price_series['return'] = np.log(price_series['Close'] / price_series['prev_close'])
         price_series.loc[first_of_day, 'return'] = np.log(
-            price_series.loc[first_of_day, 'open'] / price_series.loc[first_of_day, 'prev_close'])
+            price_series.loc[first_of_day, 'Open'] / price_series.loc[first_of_day, 'prev_close'])
 
         return_series = price_series[['Date', 'return']].dropna()
         return_series['return'] = return_series['return'] ** 2
@@ -214,11 +192,117 @@ class EstimateVolatility:
 
         return annualized_daily_volatility.dropna() if clean else annualized_daily_volatility
 
+    # -----------------------------------------------------------------------------------------------------
+    # --------------------------------------Implied Volatility---------------------------------------------
+    # -----------------------------------------------------------------------------------------------------
+    @staticmethod
+    def binomial_option_price(S: float, K: float, T: float, r: float, sigma: float,
+                              q: float = 0.0, N: int = 100, option_type: Literal['CE', 'PE'] = 'CE',
+                              american: bool = False, model: Literal['CRR', 'JR'] = 'CRR') -> float:
+        """
+        Price a European or American option via a recombining binomial tree.
+
+        Parameters
+        ----------
+        S : float
+            Current stock price.
+        K : float
+            Strike price.
+        T : float
+            Time to maturity in years.
+        r : float
+            Risk-free interest rate (annual).
+        sigma : float
+            Volatility (annual).
+        q : float, default 0.0
+            Continuous dividend yield.
+        N : int, default 100
+            Number of time steps.
+        option_type : {'CE', 'PE'}, default ''CE
+            Option type.
+        american : bool, default False
+            If True, price an American option.
+        model : {'CRR', 'JR'}, default 'CRR'
+            Binomial model: Cox–Ross–Rubinstein or Jarrow–Rudd.
+
+        Returns
+        -------
+        float
+            The option price.
+        """
+        dt = T / N
+        if model == 'CRR':
+            up_factor = np.exp(sigma * np.sqrt(dt))
+        else:  # Jarrow–Rudd
+            up_factor = np.exp((r - q - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt))
+        down_factor = 1 / up_factor
+        disc = np.exp(-r * dt)
+
+        # Risk-neutral probability
+        p = (np.exp((r - q) * dt) - down_factor) / (up_factor - down_factor)
+
+        # Stock prices at maturity, vectorized: S * up_factor**j * down_factor**(N-j)
+        j = np.arange(N + 1)
+        ST = S * (up_factor ** j) * (down_factor ** (N - j))
+
+        # Option values at maturity
+        if option_type == 'CE':
+            values = np.maximum(ST - K, 0.0)
+        else:
+            values = np.maximum(K - ST, 0.0)
+
+        # Step backwards
+        for i in range(N - 1, -1, -1):
+            # Discounted expectation
+            values = disc * (p * values[1:] + (1 - p) * values[:-1])
+
+            if american:
+                # Early-exercise payoff at node i
+                S_t = S * (up_factor ** np.arange(i + 1)) * (down_factor ** (i - np.arange(i + 1)))
+                if option_type == 'CE':
+                    values = np.maximum(values, S_t - K)
+                else:
+                    values = np.maximum(values, K - S_t)
+
+        return float(values[0])
+
+
+    @classmethod
+    def implied_vol_binomial(cls, S: float, K: float, T: float, r: float, q: float, market_price: float,
+                             N: int = 100, option_type: Literal['CE', 'PE'] = 'CE',
+                             american: bool = False, model: Literal['CRR', 'JR'] = 'CRR',
+                             tol: float = 1e-6, vol_bounds: tuple = (1e-5, 5.0)) -> float:
+        """
+        Solve implied volatility under a binomial-tree pricer.
+
+        Raises
+        ------
+        ValueError
+            If `market_price` lies outside the no‐arbitrage bounds.
+        """
+        # No‐arbitrage bounds for European call: [max(0, S e^{-qT}-K e^{-rT}), S e^{-qT}]
+        lower_bound = max(0.0, S * np.exp(-q * T) - K * np.exp(-r * T))
+        upper_bound = S * np.exp(-q * T)
+        if not (lower_bound <= market_price <= upper_bound):
+            msg = (
+                f"Market price {market_price:.4f} outside arbitrage bounds "
+                f"[{lower_bound:.4f}, {upper_bound:.4f}]."
+            )
+            raise ValueError
+
+        def objective(vol: float) -> float:
+            return (cls.binomial_option_price(
+                S, K, T, r, vol, q, N, option_type, american, model
+            ) - market_price)
+
+        iv = brentq(objective, *vol_bounds, xtol=tol)
+        return iv
+
     @staticmethod
     def bsm_implied_volatility(mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
         """
         Calculate the implied volatility using the Black-Scholes-Merton model.
-        If the computed volatility is unrealistically low, return "flag".
+        If the computed volatility is unrealistically low, raises Value Error.
         """
 
         if current_date is None:
@@ -228,7 +312,7 @@ class EstimateVolatility:
         trading_days = np.busday_count(current_date, maturity)
         calendar_days = np.busday_count(current_date, maturity, weekmask='1111111')
 
-        r = np.mean(rf['MIBOR Rate (%)'])
+        r = rf
 
         t1 = trading_days / 252  # Trading days to years
         t2 = calendar_days / 365  # Calendar days to years
@@ -246,7 +330,7 @@ class EstimateVolatility:
 
         if mkt_price < intrinsic_value:
             print("Market price is below intrinsic value.")
-            return "flag"
+            raise ValueError
 
         # --- End intrinsic value check ---
 
@@ -263,30 +347,9 @@ class EstimateVolatility:
             """Objective function for root-finding."""
             return bsm_price(sigma) - mkt_price
 
-        # Define a small positive lower bound and an upper bound for sigma
-        sigma_low = 1e-6
-        sigma_high = 5
-
-        # Check if there is a sign change between the bounds
-        f_low = objective_function(sigma_low)
-        f_high = objective_function(sigma_high)
-        if f_low * f_high > 0:
-            print(f"No sign change between sigma_low={sigma_low} (f={f_low}) and sigma_high={sigma_high} (f={f_high}).")
-            return np.nan
-
-        try:
-            implied_vol = brentq(objective_function, sigma_low, sigma_high)
-            # Check if the solution is unrealistically low (i.e., essentially at the lower bound)
-            min_acceptable_vol = 0.001  # You can adjust this threshold as needed
-            if implied_vol < min_acceptable_vol:
-                print("Implied volatility returned is too low, flagged.")
-                return "flag"
-            return implied_vol
-        except ValueError as e:
-            print(f"Failed to find implied volatility: {e}")
-            return np.nan
-
-    def corrado_su_implied_moments(self, mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
+        return newton(objective_function, 0.01)
+    @staticmethod
+    def corrado_su_implied_moments(mkt_price, S, K, rf, maturity, option_category, q=0, current_date=None):
         """
         Compute the implied moments (volatility, skew, and kurtosis) for an option using the Corrado-Su adjustment.
 
@@ -314,7 +377,7 @@ class EstimateVolatility:
         """
 
         # Compute risk-free rate as the average of MIBOR rates.
-        r = np.mean(rf['MIBOR Rate (%)'])
+        r = rf
 
         # Use today's date if current_date is not provided.
         if current_date is None:
@@ -467,6 +530,33 @@ class EstimateVolatility:
         })
         return df
 
+    # --------------------------------------Forecasted Volatility---------------------------------------------
+    def garch(self, horizon=30, trading_periods=DEFAULT_TRADING_PERIODS):
+        """
+        Calculate volatility using a GARCH(1,1) model.
+
+        :param horizon: Forecast horizon for GARCH model.
+        :param trading_periods: Number of trading periods in a year for annualization.
+        :return: Annualized GARCH volatility forecast.
+        """
+        return_series = (self.daily_data['Close'] / self.daily_data['Close'].shift(1)).apply(np.log).dropna()
+        return_series = return_series * 100  # Scale for numerical stability
+
+        model = arch_model(return_series, vol='GARCH', p=1, q=1, dist='t').fit(disp='off')
+        forecast = model.forecast(horizon=horizon)
+        # Extract the volatility for the last day of the horizon
+        # This is the volatility over the entire horizon (e.g., 30 days)
+        horizon_volatility = np.sqrt(forecast.variance.iloc[:, -1]) / 100  # Undo scaling
+
+        # Convert horizon volatility to daily volatility
+        daily_volatility = horizon_volatility  # / np.sqrt(horizon)
+
+        # Annualize the daily volatility
+        annualized_volatility = daily_volatility * np.sqrt(trading_periods)
+
+        return annualized_volatility
+
+    # -----------------------------------------Cones-----------------------------------------------------------
     def cones(self, moment='vol'):
         """
         Calculates volatility cones using logarithmic returns and multiple rolling window sizes.
@@ -480,7 +570,7 @@ class EstimateVolatility:
         """
         try:
             # Ensure the expected 'close' column exists in the data.
-            if 'close' not in self.cones_data.columns:
+            if 'Close' not in self.cones_data.columns:
                 raise AttributeError("The data does not contain a 'close' column.")
 
             # Initialize an empty DataFrame to store our computed values.
@@ -504,7 +594,7 @@ class EstimateVolatility:
                 return m
 
             # Calculate logarithmic returns and store them in the DataFrame.
-            cones_df['ln_returns'] = (self.cones_data['close'] / self.cones_data['close'].shift(1)).apply(np.log)
+            cones_df['ln_returns'] = (self.cones_data['Close'] / self.cones_data['Close'].shift(1)).apply(np.log)
             cones_df.dropna(inplace=True)  # Corrected: remove assignment here.
 
             # Define the rolling windows (in days) for volatility calculations.

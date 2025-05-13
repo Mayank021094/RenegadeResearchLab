@@ -17,6 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import json
 from yahooquery import Ticker
+import yfinance as yf
 
 
 # ---------------------CONSTANTS------------------#
@@ -192,11 +193,14 @@ class ExtractOptionsData:
 
         # Download OHLC data (here using yahooquery's Ticker instead of yfinance directly)
         # The code is set to handle adjustments and attempt multiple retries if needed.
-        stock = Ticker(self.ticker, asynchronous=True, retry=20, status_forcelist=[404, 429, 500, 502, 503, 504])
-        data = stock.history(adj_ohlc=True, **kwargs)
+        # stock = Ticker(self.ticker, asynchronous=True, retry=20, status_forcelist=[404, 429, 500, 502, 503, 504])
+        # data = stock.history(adj_ohlc=True, **kwargs)
+        #
+        # # The returned MultiIndex often has the symbol in the first level; drop it for clarity
+        # data.index = data.index.droplevel('symbol')
+        stock = yf.Ticker(self.ticker)
+        data = stock.history(auto_adjust=True, **kwargs)
 
-        # The returned MultiIndex often has the symbol in the first level; drop it for clarity
-        data.index = data.index.droplevel('symbol')
         data.index = data.index.map(lambda x: x.date() if hasattr(x, 'date') else x)
         return data
     @staticmethod
@@ -248,11 +252,11 @@ class ExtractOptionsData:
                 return dividend_yield / 100.0
             else:
                 # Inform the user if dividend yield data is not available.
-                print("⚠️ Dividend yield information is not available for this ticker.")
+                print(f"⚠️ Dividend yield information is not available for {ticker}.")
                 return 0
         except Exception as e:
             # Catch any errors that occur during data retrieval.
-            print(f"⚠️ An error occurred while fetching dividend yield: {e}")
+            print(f"⚠️ An error occurred while fetching dividend yield for {ticker} : {e}")
             return 0
 
 

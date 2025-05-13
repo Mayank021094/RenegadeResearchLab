@@ -17,13 +17,13 @@ def edge_table(options_json):
     # Create Edge dataframe
     data = []
     for s in symbols:
-        expiry_list = options_json['NIFTY']['CE'].keys()
+        expiry_list = options_json[s]['expiry'].keys()
         for expiry in expiry_list:
             try:
                 data.append({
                     'Symbol': f"{s}",
                     'Maturity': expiry,
-                    'Edge': options_json[s]['CE'][expiry]['implied_moments']['edge']
+                    'Edge': options_json[s]['expiry'][expiry]['edge']
                 })
             except:
                 print(s)
@@ -35,9 +35,9 @@ def edge_table(options_json):
 
 
 def estimator_table(symbol_json, expiry):
-    cones_list = ['Volatility_Cones_df', 'Skewness_Cones_df', 'Kurtosis_Cones_df']
+    #cones_list = ['Volatility_Cones_df', 'Skewness_Cones_df', 'Kurtosis_Cones_df']
     estimators = symbol_json['realized_volatility'].keys()
-    estimators = [k for k in estimators if k not in cones_list]
+    estimators = [k for k in estimators]
     data = []
     volatility_json = symbol_json['realized_volatility']
     for estimator in estimators:
@@ -48,22 +48,22 @@ def estimator_table(symbol_json, expiry):
             '90% CI Upper Limit': volatility_json[estimator].quantile(0.95)
         })
     data.append({'Estimator': 'BSM Implied Volatility',
-                 'Point Forecast': symbol_json['CE'][expiry]['implied_moments']['bsm_implied_vol'],
+                 'Point Forecast': symbol_json['expiry'][expiry]['implied_moments']['bsm_atm_iv'],
                  '90% CI Lower Limit': '-',
                  '90% CI Upper Limit': '-',
                  })
     data.append({'Estimator': 'Corrado-Su Implied Volatility',
-                 'Point Forecast': symbol_json['CE'][expiry]['implied_moments']['cs_implied_vol'],
+                 'Point Forecast': symbol_json['expiry'][expiry]['implied_moments']['cs_implied_vol'],
                  '90% CI Lower Limit': '-',
                  '90% CI Upper Limit': '-',
                  })
     data.append({'Estimator': 'Corrado-Su Implied Skewness',
-                 'Point Forecast': symbol_json['CE'][expiry]['implied_moments']['cs_implied_skew'],
+                 'Point Forecast': symbol_json['expiry'][expiry]['implied_moments']['cs_implied_skew'],
                  '90% CI Lower Limit': '-',
                  '90% CI Upper Limit': '-',
                  })
     data.append({'Estimator': 'Corrado-Su Implied Kurtosis',
-                 'Point Forecast': symbol_json['CE'][expiry]['implied_moments']['cs_implied_kurt'],
+                 'Point Forecast': symbol_json['expiry'][expiry]['implied_moments']['cs_implied_kurt'],
                  '90% CI Lower Limit': '-',
                  '90% CI Upper Limit': '-',
                  })

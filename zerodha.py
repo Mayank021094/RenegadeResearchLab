@@ -1,6 +1,9 @@
 # ------------------Import Libraries -------------#
 import re
 import logging
+from typing import List
+
+import numpy as np
 import pandas as pd
 from kiteconnect import KiteConnect, KiteTicker
 from selenium import webdriver
@@ -11,6 +14,7 @@ from requests.exceptions import ConnectionError, Timeout, RequestException
 import datetime
 import json
 import yfinance as yf
+from yahooquery import Ticker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,7 +23,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # ---------------------CONSTANTS------------------#
 # API_KEY = ''  # Your Kite API key - ensure this is set
 # CLIENT_ID = 'CCC807'  # Your client ID
-
+TIME_LOWER_LIMIT = 15
+TIME_UPPER_LIMIT = 60
 
 # --------------------MAIN CODE-------------------#
 class Zerodha_Api:
@@ -156,8 +161,8 @@ class Zerodha_Api:
             # parse expiry safely (invalid parse → NaT)
             expiries = pd.to_datetime(options_df['expiry'], errors='coerce')
             mask = (
-                    (expiries > today + pd.Timedelta(days=3)) &
-                    (expiries < today + pd.Timedelta(days=60))
+                    (expiries > today + pd.Timedelta(days=TIME_LOWER_LIMIT)) &
+                    (expiries < today + pd.Timedelta(days=TIME_UPPER_LIMIT))
             )
             options_df = options_df[mask]
             self.options_df = options_df
@@ -187,85 +192,159 @@ class Zerodha_Api:
         try:
             symbols_df = pd.DataFrame({
                 'symbol': symbols,
-                'underlying': categories
+                'category': categories
             })
             return symbols_df
         except Exception as e:
             logging.error(f"[extract_available_symbols] Failed to build symbols_df: {e}")
             return pd.DataFrame()
 
-    def extract_options_chain(self, ticker, category):
-
-        def f_cmp(ticker):
-            if ticker == 'NIFTY':
-                symbol = '^NSEI'
-            elif ticker == 'BANKNIFTY':
-                symbol = '^NSEBANK'
-            elif ticker == 'FINNIFTY':
-                symbol = 'NIFTY_FIN_SERVICE.NS'
-            elif ticker == 'MIDCPNIFTY':
-                symbol = 'NIFTY_MIDCAP_100.NS'
-            elif ticker == 'NIFTYNXT50':
-                symbol = '^NSMIDCP'
-            else:
-                symbol = ticker + '.NS'
-            yf_obj = yf.Ticker(symbol)
-            cmp = yf_obj.history(period='1d')['Close'][0]
-
-            return cmp
-
-        pass
-
-    @staticmethod
-    def extract_instrument_token(name, instrument_type, expiry=None, strike=None):
+    def extract_options_chain(self, ticker: str) -> pd.DataFrame:
         """
-        Extracts the instrument token from the instruments CSV by filtering based on
-        the provided criteria: name, instrument type, and optionally expiry date and strike value.
+        Extracts the top-5 ATM options chain for a given ticker.
 
         Parameters:
-            name (str): The name of the instrument.
-            instrument_type (str): The type of the instrument.
-            expiry (datetime.date, optional): The expiry date of the instrument. Defaults to None.
-            strike (float, optional): The strike price of the instrument. Defaults to None.
+            ticker (str): Underlying symbol (e.g. 'NIFTY', 'BANKNIFTY', or any NSE stock code).
 
         Returns:
-            tradingsymbol (str): The trading symbol corresponding to the instrument.
+            pd.DataFrame: Merged DataFrame of call and put data for the top-5 ATM strikes.
         """
+        # 1. Input validation
+        if not isinstance(ticker, str) or not ticker.strip():
+            raise ValueError("`ticker` must be a non-empty string.")
+
+        # 2. Map to Yahoo Finance symbol and fetch spot price
+        def _get_spot_price(symbol: str) -> float:
+            """Return last close price via yfinance."""
+            price_map = {
+                'NIFTY': '^NSEI',
+                'BANKNIFTY': '^NSEBANK',
+                'FINNIFTY': 'NIFTY_FIN_SERVICE.NS',
+                'MIDCPNIFTY': 'NIFTY_MIDCAP_100.NS',
+                'NIFTYNXT50': '^NSMIDCP'
+            }
+            yf_symbol = price_map.get(symbol, f"{symbol}.NS")
+            try:
+                hist = yf.Ticker(yf_symbol).history(period="1d")
+                return float(hist['Close'].iloc[0])
+            except Exception as err:
+                logging.error(f"Error fetching spot price for {yf_symbol}: {err}")
+                raise RuntimeError(f"Failed to fetch spot price for {symbol}")
+
+        spot_price = _get_spot_price(ticker)
+
+        # 3. Filter available strikes and pick top-5 ATM
+        df = self.options_df
+        available = df[df['name'] == ticker]
+        if available.empty:
+            raise LookupError(f"No options data found for ticker '{ticker}'")
+        strikes = available['strike'].unique()
+        top_strikes = sorted(strikes, key=lambda s: abs(s - spot_price))[:11]
+        strike_price_multiple = np.abs(top_strikes[1] - top_strikes[0])
+
+        subset = available[available['strike'].isin(top_strikes)]
+        calls = subset[subset['instrument_type'] == 'CE']
+        puts = subset[subset['instrument_type'] == 'PE']
+
+        # 4. Fetch live quotes from Kite
+        tokens = subset['instrument_token'].astype(str).tolist()
         try:
-            instrument_df = pd.read_csv("https://api.kite.trade/instruments", parse_dates=True)
-        except Exception as e:
-            logging.exception("Failed to load instruments CSV")
-            raise
+            raw_quotes = self.kite.quote(tokens)
+        except Exception as err:
+            logging.error(f"Kite quote API error: {err}")
+            raise RuntimeError("Failed to fetch live quotes")
 
-        # Ensure the CSV contains the necessary columns
-        required_columns = {'name', 'instrument_type', 'expiry', 'strike', 'tradingsymbol'}
-        if not required_columns.issubset(instrument_df.columns):
-            msg = "CSV is missing one or more required columns: " + ", ".join(required_columns)
-            logging.error(msg)
-            raise ValueError(msg)
+        # 5. Build rows in a list for performance
+        rows: List[dict] = []
+        for strike in top_strikes:
+            call_slice = calls[calls['strike'] == strike]
+            put_slice = puts[puts['strike'] == strike]
 
+            for df_slice, side in ((call_slice, "CE"), (put_slice, "PE")):
+                for _, opt in df_slice.iterrows():
+                    tok = str(opt['instrument_token'])
+                    try:
+                        q = raw_quotes[tok]
+                        depth = q.get('depth', {})
+                        ohlc = q.get('ohlc', {})
+                        rows.append({
+                            "instrument_type": side,
+                            "underlying_last": spot_price,
+                            "ticker_symbol": ticker,
+                            "strike": strike,
+                            "expiry": opt['expiry'],
+                            f"{side.lower()}_token": tok,
+                            f"{side.lower()}_volume": q.get('volume'),
+                            f"{side.lower()}_bid_qty": depth['buy'][0]['quantity'],
+                            f"{side.lower()}_bid_price": depth['buy'][0]['price'],
+                            f"{side.lower()}_ask_price": depth['sell'][0]['price'],
+                            f"{side.lower()}_ask_qty": depth['sell'][0]['quantity'],
+                            f"{side.lower()}_oi": q.get('oi'),
+                            f"{side.lower()}_open": ohlc.get('open'),
+                            f"{side.lower()}_high": ohlc.get('high'),
+                            f"{side.lower()}_low": ohlc.get('low'),
+                            f"{side.lower()}_close": ohlc.get('close'),
+                            f"trading_symbol_{side.lower()}": opt['tradingsymbol']
+                        })
+                    except (KeyError, IndexError) as e:
+                        logging.warning(f"Missing data for token {tok}: {e}")
+                        continue
+
+        # 6. Final DataFrame and merge CE/PE columns
+        result_df = pd.DataFrame(rows)
+        # wide-format: one row per strike, CE & PE side-by-side
         try:
-            # Convert the 'expiry' column to datetime.date objects.
-            instrument_df['expiry'] = pd.to_datetime(instrument_df['expiry']).dt.date
-        except Exception as e:
-            logging.exception("Error converting expiry column to datetime.date")
-            raise
+            # 6a. Merge the stacked versions
+            ce_df = result_df[result_df['instrument_type'] == 'CE'][[
+                'ticker_symbol', 'underlying_last', 'strike', 'expiry',
+                'ce_token', 'ce_bid_qty', 'ce_bid_price', 'ce_ask_qty', 'ce_ask_price',
+                'ce_oi', 'ce_open', 'ce_high', 'ce_low', 'ce_close', 'trading_symbol_ce'
+            ]]
 
-        # Build the mask for filtering
-        mask = (instrument_df['name'] == name) & (instrument_df['instrument_type'] == instrument_type)
-        if expiry is not None:
-            mask &= (instrument_df['expiry'] == expiry)
-        if strike is not None:
-            mask &= (instrument_df['strike'] == strike)
+            pe_df = result_df[result_df['instrument_type'] == 'PE'][[
+                'strike', 'expiry', 'ticker_symbol', 'underlying_last',
+                'pe_token', 'pe_bid_qty', 'pe_bid_price', 'pe_ask_qty', 'pe_ask_price',
+                'pe_oi', 'pe_open', 'pe_high', 'pe_low', 'pe_close', 'trading_symbol_pe'
+            ]]
 
-        filtered_df = instrument_df[mask]
+            # 6b) Merge on the true keys
+            final_df = pd.merge(
+                ce_df,
+                pe_df,
+                on=['strike', 'expiry', 'ticker_symbol', 'underlying_last'],
+                suffixes=('_ce', '_pe'),
+                how='outer'
+            )
+            final_df['mid_ce'] = (final_df['ce_bid_price'] + final_df['ce_ask_price']) / 2
+            final_df['mid_pe'] = (final_df['pe_bid_price'] + final_df['pe_ask_price']) / 2
+            final_df['bid_ask_spread_ce'] = final_df['ce_ask_price'] - final_df['ce_bid_price']
+            final_df['bid_ask_spread_pe'] = final_df['pe_ask_price'] - final_df['pe_bid_price']
+            final_df['bid_ask_pct_ce'] = final_df['bid_ask_spread_ce'] / final_df['mid_ce']
+            final_df['bid_ask_pct_pe'] = final_df['bid_ask_spread_pe'] / final_df['mid_pe']
+            final_df['atm_strike'] = strike_price_multiple * (
+                round(final_df['underlying_last'] / strike_price_multiple))
 
-        if filtered_df.empty:
-            msg = "No instrument found matching the given criteria."
-            logging.error(msg)
-            raise ValueError(msg)
+            # 6c) Liquidity filters
+            final_df.dropna(inplace=True)
+            # final_df = final_df[
+            #     (final_df['ce_oi'] >= 500) &
+            #     (final_df['pe_oi'] >= 500) &
+            #     (final_df['bid_ask_pct_ce'] <= 0.1) &
+            #     (final_df['bid_ask_pct_pe'] <= 0.1)
+            #     ].reset_index(drop=True)
 
-        return filtered_df.iloc[0]['tradingsymbol']
+            self.option_chain = final_df
+            return final_df
+        except Exception:
+            # fallback: just return the stacked view
+            final_df = result_df
+            final_df.dropna(inplace=True)
+            # final_df = final_df[
+            #     (final_df['ce_oi'] >= 500) &
+            #     (final_df['pe_oi'] >= 500)
+            #     ].reset_index(drop=True)
+            self.option_chain = final_df
+            return final_df
 
     def place_orders(self, trading_symbol='SETFNIFBK', exchange='NSE', transaction_type='BUY', quantity=1,
                      variety='regular', order_type='MARKET',

@@ -214,17 +214,30 @@ def results(id):
 # (Note: For testing purposes only. In production, consider a proper caching mechanism.)
 _cached_options_json = None
 _cached_edge_df = None
+_kite_obj = None
 
 
 # ---------------------- Options Routes ----------------------
 @app.route('/options', methods=['GET', 'POST'])
 @login_required
+def options_generate_session():
+    return render_template("options_generate_session.html")
+
+
+@app.route('/options/dashboard', methods=['GET', 'POST'])
+@login_required
 def options():
-    global _cached_options_json, _cached_edge_df
+    if request.method == 'POST':
+        api_key = request.form.get('api_key', '').strip()
+        secret_key = request.form.get('secret_key', '').strip()
+        client_id = request.form.get('client_id', '').strip()
+
+    global _cached_options_json, _cached_edge_df, _kite_obj
+
     if _cached_options_json is None:
-        #_cached_options_json = option_json()    #<-- Uncomment this when you wish to calculate it on the fly
-        with open("options_json_for_ui_testing_2.pkl", "rb") as file:
-            _cached_options_json = pickle.load(file)
+        _cached_options_json, _kite_obj = option_json(api_key, secret_key, client_id)
+        # with open("options_json_for_ui_testing_2.pkl", "rb") as file:
+        #     _cached_options_json = pickle.load(file)
         # Note: Do not convert datetime objects to strings here;
         # we need them in their original format for further calculations.
         _cached_edge_df = edge_table(_cached_options_json)
